@@ -8,6 +8,7 @@ import co.onmind.microhex.domain.exceptions.DuplicateRoleException;
 import co.onmind.microhex.domain.exceptions.RoleNotFoundException;
 import co.onmind.microhex.domain.models.Role;
 import co.onmind.microhex.domain.services.RoleService;
+import co.onmind.microhex.infrastructure.webclients.NotificationWebClient;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -16,7 +17,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.Collections;
@@ -28,7 +28,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
- * Unit tests for RoleUseCaseImpl.
+ * Unit tests for RoleUseCase.
  * 
  * This test class verifies the behavior of the role use case implementation,
  * including successful operations, error handling, and edge cases.
@@ -38,7 +38,7 @@ import static org.mockito.Mockito.*;
  * @version 1.0.0
  */
 @ExtendWith(MockitoExtension.class)
-@DisplayName("RoleUseCaseImpl Tests")
+@DisplayName("RoleUseCase Tests")
 class RoleUseCaseImplTest {
     
     @Mock
@@ -49,12 +49,15 @@ class RoleUseCaseImplTest {
     
     @Mock
     private RoleMapper roleMapper;
+    
+    @Mock
+    private NotificationWebClient notificationWebClient;
 
-    private RoleUseCaseImpl roleUseCase;
+    private RoleUseCase roleUseCase;
     
     @BeforeEach
     void setUp() {
-        roleUseCase = new RoleUseCaseImpl(roleService, roleRepositoryPort, roleMapper);
+        roleUseCase = new RoleUseCase(roleService, roleRepositoryPort, roleMapper, notificationWebClient);
     }
     
     @Nested

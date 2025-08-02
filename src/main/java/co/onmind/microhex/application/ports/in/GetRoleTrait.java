@@ -16,7 +16,7 @@ import java.util.List;
  * @author OnMind (Cesar Andres Arcila Buitrago)
  * @version 1.0.0
  */
-public interface GetRoleUseCase {
+public interface GetRoleTrait {
     
     /**
      * Retrieves a specific role by its unique identifier.

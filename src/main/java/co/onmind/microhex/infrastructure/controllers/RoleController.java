@@ -2,8 +2,8 @@ package co.onmind.microhex.infrastructure.controllers;
 
 import co.onmind.microhex.application.dto.in.CreateRoleRequestDto;
 import co.onmind.microhex.application.dto.out.RoleResponseDto;
-import co.onmind.microhex.application.ports.in.CreateRoleUseCase;
-import co.onmind.microhex.application.ports.in.GetRoleUseCase;
+import co.onmind.microhex.application.ports.in.CreateRoleTrait;
+import co.onmind.microhex.application.ports.in.GetRoleTrait;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,18 +31,18 @@ public class RoleController {
     
     private static final Logger logger = LoggerFactory.getLogger(RoleController.class);
     
-    private final CreateRoleUseCase createRoleUseCase;
-    private final GetRoleUseCase getRoleUseCase;
+    private final CreateRoleTrait createRoleTrait;
+    private final GetRoleTrait getRoleTrait;
     
     /**
      * Constructor for dependency injection.
      * 
-     * @param createRoleUseCase Use case for creating roles
-     * @param getRoleUseCase Use case for retrieving roles
+     * @param createRoleTrait Use case for creating roles
+     * @param getRoleTrait Use case for retrieving roles
      */
-    public RoleController(CreateRoleUseCase createRoleUseCase, GetRoleUseCase getRoleUseCase) {
-        this.createRoleUseCase = createRoleUseCase;
-        this.getRoleUseCase = getRoleUseCase;
+    public RoleController(CreateRoleTrait createRoleTrait, GetRoleTrait getRoleTrait) {
+        this.createRoleTrait = createRoleTrait;
+        this.getRoleTrait = getRoleTrait;
     }
     
     /**
@@ -57,7 +57,7 @@ public class RoleController {
     public ResponseEntity<RoleResponseDto> createRole(@Valid @RequestBody CreateRoleRequestDto request) {
         logger.info("Creating new role with name: {}", request.name());
         
-        RoleResponseDto createdRole = createRoleUseCase.createRole(request);
+        RoleResponseDto createdRole = createRoleTrait.createRole(request);
         
         logger.info("Successfully created role with ID: {}", createdRole.id());
         
@@ -75,7 +75,7 @@ public class RoleController {
     public ResponseEntity<List<RoleResponseDto>> getAllRoles() {
         logger.info("Retrieving all roles");
         
-        List<RoleResponseDto> roles = getRoleUseCase.getAllRoles();
+        List<RoleResponseDto> roles = getRoleTrait.getAllRoles();
         
         logger.info("Successfully retrieved {} roles", roles.size());
         
@@ -98,7 +98,7 @@ public class RoleController {
             throw new IllegalArgumentException("Role ID must be a positive number");
         }
         
-        RoleResponseDto role = getRoleUseCase.getRoleById(id);
+        RoleResponseDto role = getRoleTrait.getRoleById(id);
         
         logger.info("Successfully retrieved role: {}", role.name());
         

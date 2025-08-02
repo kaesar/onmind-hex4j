@@ -2,15 +2,16 @@ package co.onmind.microhex.infrastructure.controllers;
 
 import co.onmind.microhex.application.dto.in.CreateRoleRequestDto;
 import co.onmind.microhex.application.dto.out.RoleResponseDto;
-import co.onmind.microhex.application.ports.in.CreateRoleUseCase;
-import co.onmind.microhex.application.ports.in.GetRoleUseCase;
+import co.onmind.microhex.application.ports.in.CreateRoleTrait;
+import co.onmind.microhex.application.ports.in.GetRoleTrait;
 import co.onmind.microhex.domain.exceptions.DuplicateRoleException;
 import co.onmind.microhex.domain.exceptions.RoleNotFoundException;
-import co.onmind.microhex.transverse.exceptions.GlobalExceptionHandler;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
@@ -37,7 +38,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * @author OnMind (Cesar Andres Arcila Buitrago)
  * @version 1.0.0
  */
-@WebMvcTest({RoleController.class, GlobalExceptionHandler.class})
+@SpringBootTest
+@AutoConfigureTestDatabase
+@AutoConfigureMockMvc
 class RoleControllerTest {
     
     @Autowired
@@ -47,18 +50,18 @@ class RoleControllerTest {
     private ObjectMapper objectMapper;
     
     @MockBean
-    private CreateRoleUseCase createRoleUseCase;
+    private CreateRoleTrait createRoleTrait;
     
     @MockBean
-    private GetRoleUseCase getRoleUseCase;
-    
+    private GetRoleTrait getRoleTrait;
+
     @Test
     void createRole_WithValidRequest_ShouldReturnCreatedRole() throws Exception {
         // Given
         CreateRoleRequestDto request = new CreateRoleRequestDto("ADMIN");
         RoleResponseDto response = new RoleResponseDto(1L, "ADMIN", LocalDateTime.now());
         
-        when(createRoleUseCase.createRole(any(CreateRoleRequestDto.class))).thenReturn(response);
+        when(createRoleTrait.createRole(any(CreateRoleRequestDto.class))).thenReturn(response);
         
         // When & Then
         mockMvc.perform(post("/api/v1/roles")
@@ -87,7 +90,7 @@ class RoleControllerTest {
         // Given
         CreateRoleRequestDto request = new CreateRoleRequestDto("ADMIN");
         
-        when(createRoleUseCase.createRole(any(CreateRoleRequestDto.class)))
+        when(createRoleTrait.createRole(any(CreateRoleRequestDto.class)))
                 .thenThrow(DuplicateRoleException.forName("ADMIN"));
         
         // When & Then
@@ -107,7 +110,7 @@ class RoleControllerTest {
                 new RoleResponseDto(2L, "USER", LocalDateTime.now())
         );
         
-        when(getRoleUseCase.getAllRoles()).thenReturn(roles);
+        when(getRoleTrait.getAllRoles()).thenReturn(roles);
         
         // When & Then
         mockMvc.perform(get("/api/v1/roles"))
@@ -122,7 +125,7 @@ class RoleControllerTest {
         // Given
         RoleResponseDto role = new RoleResponseDto(1L, "ADMIN", LocalDateTime.now());
         
-        when(getRoleUseCase.getRoleById(eq(1L))).thenReturn(role);
+        when(getRoleTrait.getRoleById(eq(1L))).thenReturn(role);
         
         // When & Then
         mockMvc.perform(get("/api/v1/roles/1"))
@@ -134,7 +137,7 @@ class RoleControllerTest {
     @Test
     void getRoleById_WithNonExistentId_ShouldReturnNotFound() throws Exception {
         // Given
-        when(getRoleUseCase.getRoleById(eq(999L)))
+        when(getRoleTrait.getRoleById(eq(999L)))
                 .thenThrow(RoleNotFoundException.forId(999L));
         
         // When & Then

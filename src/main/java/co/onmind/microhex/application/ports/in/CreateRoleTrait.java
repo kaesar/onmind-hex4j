@@ -16,7 +16,7 @@ import co.onmind.microhex.application.dto.out.RoleResponseDto;
  * @author OnMind (Cesar Andres Arcila Buitrago)
  * @version 1.0.0
  */
-public interface CreateRoleUseCase {
+public interface CreateRoleTrait {
     
     /**
      * Creates a new role in the system.

@@ -1,7 +1,7 @@
 package co.onmind.microhex.domain.services;
 
 import co.onmind.microhex.domain.models.Role;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -16,7 +16,7 @@ import java.util.List;
  * @author OnMind (Cesar Andres Arcila Buitrago)
  * @version 1.0.0
  */
-@Service
+@Component
 public class RoleService {
     
     /**

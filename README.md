@@ -63,7 +63,7 @@ The application will start on `http://localhost:8080`
 ### Building the Project
 
 ```bash
-./gradlew build -x test
+./gradlew build
 ```
 
 ### Running Tests
@@ -71,7 +71,7 @@ The application will start on `http://localhost:8080`
 ```bash
 ./gradlew test
 ```
-
+<!--
 ### Accessing H2 Console
 
 When the application is running, you can access the H2 database console at:
@@ -90,7 +90,7 @@ The template includes a complete Role management example demonstrating:
 - REST API endpoints
 - JPA persistence
 - Comprehensive testing
-
+-->
 ## API Endpoints (Coming in next tasks)
 
 - `POST /api/v1/roles` - Create a new role
@@ -119,8 +119,8 @@ To add a new entity (e.g., User):
 - Implement comprehensive testing at all layers
 - Follow SOLID principles
 - Use meaningful package structure
-- Document public APIs
-
+<!--
 ## License
 
 This template is provided as-is for educational and development purposes.
+-->

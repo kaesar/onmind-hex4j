@@ -47,6 +47,10 @@ server:
     buffer-size: 1024
     direct-buffers: true
 
+notification:
+  service:
+    url: http://localhost:8081
+
 # Management endpoints
 management:
   endpoints:

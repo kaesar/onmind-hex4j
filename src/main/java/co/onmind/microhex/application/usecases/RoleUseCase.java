@@ -3,14 +3,17 @@ package co.onmind.microhex.application.usecases;
 import co.onmind.microhex.application.dto.in.CreateRoleRequestDto;
 import co.onmind.microhex.application.dto.out.RoleResponseDto;
 import co.onmind.microhex.application.mappers.RoleMapper;
-import co.onmind.microhex.application.ports.in.CreateRoleUseCase;
-import co.onmind.microhex.application.ports.in.GetRoleUseCase;
+import co.onmind.microhex.application.ports.in.CreateRoleTrait;
+import co.onmind.microhex.application.ports.in.GetRoleTrait;
 import co.onmind.microhex.application.ports.out.RoleRepositoryPort;
 import co.onmind.microhex.domain.exceptions.DuplicateRoleException;
 import co.onmind.microhex.domain.exceptions.RoleNotFoundException;
 import co.onmind.microhex.domain.models.Role;
 import co.onmind.microhex.domain.services.RoleService;
-import org.springframework.stereotype.Component;
+import co.onmind.microhex.infrastructure.webclients.NotificationWebClient;
+import co.onmind.microhex.infrastructure.webclients.dto.NotificationRequest;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -32,12 +35,14 @@ import java.util.stream.Collectors;
  * @author OnMind (Cesar Andres Arcila Buitrago)
  * @version 1.0.0
  */
-@Component
-public class RoleUseCaseImpl implements CreateRoleUseCase, GetRoleUseCase {
+@Service
+@Slf4j
+public class RoleUseCase implements CreateRoleTrait, GetRoleTrait {
     
     private final RoleService roleService;
     private final RoleRepositoryPort roleRepositoryPort;
     private final RoleMapper roleMapper;
+    private final NotificationWebClient notificationWebClient;
 
     /**
      * Constructor for dependency injection.
@@ -45,14 +50,17 @@ public class RoleUseCaseImpl implements CreateRoleUseCase, GetRoleUseCase {
      * @param roleService Domain service for role business logic
      * @param roleRepositoryPort Output port for role persistence
      * @param roleMapper Mapper for DTO transformations
+     * @param notificationWebClient Web client for notifications
      */
-    public RoleUseCaseImpl(
+    public RoleUseCase(
             RoleService roleService,
             RoleRepositoryPort roleRepositoryPort,
-            RoleMapper roleMapper) {
+            RoleMapper roleMapper,
+            NotificationWebClient notificationWebClient) {
         this.roleService = roleService;
         this.roleRepositoryPort = roleRepositoryPort;
         this.roleMapper = roleMapper;
+        this.notificationWebClient = notificationWebClient;
     }
     
     /**
@@ -81,6 +89,14 @@ public class RoleUseCaseImpl implements CreateRoleUseCase, GetRoleUseCase {
         
         // Persist the role
         Role savedRole = roleRepositoryPort.save(role);
+        
+        // Send notification
+        try {
+            NotificationRequest notification = new NotificationRequest("Role created: " + savedRole.getName());
+            notificationWebClient.post("/api/notify", notification);
+        } catch (Exception e) {
+            log.error("Error sending notification for role creation: {}", savedRole.getName(), e);
+        }
         
         // Transform to response DTO
         return roleMapper.toResponseDto(savedRole);
