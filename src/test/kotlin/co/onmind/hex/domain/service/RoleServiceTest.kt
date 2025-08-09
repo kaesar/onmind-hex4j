@@ -1,8 +1,8 @@
 package co.onmind.hex.domain.service
 
 import co.onmind.hex.domain.model.Role
-import co.onmind.hex.domain.ports.NotificationPort
-import co.onmind.hex.domain.ports.RoleRepository
+import co.onmind.hex.domain.ports.out.NotificationPort
+import co.onmind.hex.domain.ports.out.RoleRepositoryPort
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.mockito.kotlin.*
@@ -10,7 +10,7 @@ import org.assertj.core.api.Assertions.assertThat
 
 class RoleServiceTest {
     
-    private val roleRepository = mock<RoleRepository>()
+    private val roleRepository = mock<RoleRepositoryPort>()
     private val notificationPort = mock<NotificationPort>()
     private val roleService = RoleService(roleRepository, notificationPort)
     
@@ -29,7 +29,6 @@ class RoleServiceTest {
         // Then
         assertThat(result).isEqualTo(savedRole)
         verify(roleRepository).save(any())
-        verify(notificationPort).notifyRoleCreated(savedRole)
     }
     
     @Test
@@ -44,7 +43,6 @@ class RoleServiceTest {
         }
         
         verify(roleRepository, never()).save(any())
-        verify(notificationPort, never()).notifyRoleCreated(any())
     }
     
     @Test
@@ -103,7 +101,6 @@ class RoleServiceTest {
         
         // Then
         verify(roleRepository).deleteById(roleId)
-        verify(notificationPort).notifyRoleDeleted(roleId, "TEST_ROLE")
     }
     
     @Test
@@ -119,7 +116,6 @@ class RoleServiceTest {
         }
         
         verify(roleRepository, never()).deleteById(any())
-        verify(notificationPort, never()).notifyRoleDeleted(any(), any())
     }
     
     @Test

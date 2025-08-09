@@ -4,29 +4,23 @@ import co.onmind.hex.application.dto.CreateRoleRequest
 import co.onmind.hex.application.dto.RoleResponse
 import co.onmind.hex.application.dto.UpdateRoleRequest
 import co.onmind.hex.application.mapper.RoleMapper
+import co.onmind.hex.domain.ports.`in`.RoleServicePort
 import co.onmind.hex.domain.service.RoleAlreadyExistsException
 import co.onmind.hex.domain.service.RoleNotFoundException
-import co.onmind.hex.domain.service.RoleService
 import co.onmind.hex.domain.service.SystemRoleException
 import io.micronaut.http.HttpResponse
 import io.micronaut.http.HttpStatus
-import io.micronaut.http.annotation.*
-import io.micronaut.validation.Validated
-import jakarta.validation.Valid
-import jakarta.validation.constraints.Min
-import jakarta.validation.constraints.NotBlank
+import jakarta.inject.Singleton
 
-@Controller("/api/v1/roles")
-@Validated
+@Singleton
 class RoleHandler(
-    private val roleService: RoleService,
+    private val roleServicePort: RoleServicePort,
     private val roleMapper: RoleMapper
 ) {
     
-    @Post
-    fun createRole(@Valid @Body request: CreateRoleRequest): HttpResponse<RoleResponse> {
+    fun createRole(request: CreateRoleRequest): HttpResponse<RoleResponse> {
         return try {
-            val role = roleService.createRole(request.name)
+            val role = roleServicePort.createRole(request.name)
             val response = roleMapper.toResponse(role)
             HttpResponse.created(response)
         } catch (e: Exception) {
@@ -38,13 +32,9 @@ class RoleHandler(
         }
     }
     
-    @Put("/{id}")
-    fun updateRole(
-        @Min(1) id: Long,
-        @Valid @Body request: UpdateRoleRequest
-    ): HttpResponse<RoleResponse> {
+    fun updateRole(id: Long, request: UpdateRoleRequest): HttpResponse<RoleResponse> {
         return try {
-            val role = roleService.updateRole(id, request.name)
+            val role = roleServicePort.updateRole(id, request.name)
             val response = roleMapper.toResponse(role)
             HttpResponse.ok(response)
         } catch (e: Exception) {
@@ -58,10 +48,9 @@ class RoleHandler(
         }
     }
     
-    @Delete("/{id}")
-    fun deleteRole(@Min(1) id: Long): HttpResponse<Void> {
+    fun deleteRole(id: Long): HttpResponse<Void> {
         return try {
-            roleService.deleteRole(id)
+            roleServicePort.deleteRole(id)
             HttpResponse.noContent()
         } catch (e: Exception) {
             when (e) {
@@ -72,9 +61,8 @@ class RoleHandler(
         }
     }
     
-    @Get("/{id}")
-    fun getRoleById(@Min(1) id: Long): HttpResponse<RoleResponse> {
-        val role = roleService.getRoleById(id)
+    fun getRoleById(id: Long): HttpResponse<RoleResponse> {
+        val role = roleServicePort.getRoleById(id)
         return if (role != null) {
             val response = roleMapper.toResponse(role)
             HttpResponse.ok(response)
@@ -83,17 +71,15 @@ class RoleHandler(
         }
     }
     
-    @Get
     fun getAllRoles(): HttpResponse<List<RoleResponse>> {
-        val roles = roleService.getAllRoles()
+        val roles = roleServicePort.getAllRoles()
         val responses = roleMapper.toResponseList(roles)
         return HttpResponse.ok(responses)
     }
     
-    @Get("/search")
-    fun searchRoles(@QueryValue @NotBlank name: String): HttpResponse<List<RoleResponse>> {
+    fun searchRoles(name: String): HttpResponse<List<RoleResponse>> {
         return try {
-            val roles = roleService.searchRolesByName(name)
+            val roles = roleServicePort.searchRolesByName(name)
             val responses = roleMapper.toResponseList(roles)
             HttpResponse.ok(responses)
         } catch (e: IllegalArgumentException) {
@@ -101,9 +87,8 @@ class RoleHandler(
         }
     }
     
-    @Get("/count")
     fun getRoleCount(): HttpResponse<Map<String, Long>> {
-        val count = roleService.getRoleCount()
+        val count = roleServicePort.getRoleCount()
         return HttpResponse.ok(mapOf("count" to count))
     }
 }

@@ -1,141 +1,123 @@
 # Hex - Hexagonal Architecture with Kotlin and Micronaut
 
-Este proyecto implementa una arquitectura hexagonal usando Kotlin, Micronaut Framework y Gradle KTS, con una variación donde los puertos se ubican en la capa de dominio.
+This project implements a hexagonal architecture approach using Kotlin, Micronaut Framework and Gradle KTS, with a variation where ports are located in the domain layer.
 
-## Arquitectura
+## Architecture
 
-### Variación de Arquitectura Hexagonal
+### Hexagonal Architecture Variation
 
-Esta implementación presenta una variación de la arquitectura hexagonal tradicional:
+This implementation presents a variation of traditional hexagonal architecture:
 
-- **Dominio**: Contiene los puertos (interfaces) y el servicio de dominio con operaciones de comandos y queries
-- **Aplicación**: Actúa como articulador con handlers/casos de uso de aplicación y mappers
-- **Infraestructura**: Implementa los adaptadores que conectan con sistemas externos
+- **Domain**: Contains ports (interfaces) and domain service with command and query operations, plus the model
+- **Application**: Acts as orchestrator with application use cases (or handlers) and mappers, injecting the service through the input port to access the domain service
+- **Infrastructure**: Implements adapters that connect with external systems
 
-### Estructura del Proyecto
+### Project Structure
 
 ```
 src/
 ├── main/kotlin/co/onmind/hex/
 │   ├── domain/
-│   │   ├── model/           # Modelos de dominio (Role)
-│   │   ├── ports/           # Puertos/Interfaces (RoleRepository, NotificationPort)
-│   │   └── service/         # Servicios de dominio (RoleService)
+│   │   ├── model/           # Domain models (Role)
+│   │   ├── ports/           # Ports/Interfaces (RoleServicePort, RoleRepository, NotificationPort)
+│   │   └── service/         # Domain services (RoleService)
 │   ├── application/
-│   │   ├── dto/             # DTOs para requests/responses
-│   │   ├── mapper/          # Mappers entre dominio y DTOs
-│   │   └── handler/         # Handlers HTTP (RoleHandler)
+│   │   ├── dto/             # DTOs for requests/responses
+│   │   ├── mapper/          # Mappers between domain and DTOs
+│   │   └── handler/         # Handlers or application use cases (RoleHandler)
 │   └── infrastructure/
-│       ├── persistence/     # Adaptadores de persistencia
-│       └── notification/    # Adaptadores de notificación
-└── test/kotlin/             # Tests unitarios e integración
+│       ├── controllers/     # Framework controller endpoints (RoleController)
+│       ├── persistence/     # Database persistence adapters
+│       └── webclient/       # Web client adapters
+└── test/kotlin/             # Unit and integration tests
 ```
 
-## Tecnologías
+## Technologies
 
-- **Kotlin 1.9.20**: Lenguaje de programación moderno
-- **Java 21**: JVM con características modernas (Virtual Threads, Pattern Matching, etc.)
-- **Micronaut 4.2.1**: Framework web reactivo y ligero
-- **Gradle KTS**: Gestor de dependencias y build con Kotlin DSL
-- **H2 Database**: Base de datos en memoria para desarrollo
-- **Micronaut Data JDBC**: ORM reactivo y eficiente
-- **JUnit 5**: Framework de testing moderno
-- **Mockito Kotlin**: Mocking para tests en Kotlin
+- **Kotlin 1.9.20**: Modern programming language
+- **Micronaut 4.2.1**: Reactive and lightweight web framework
+- **Gradle KTS**: Dependency manager and build tool with Kotlin DSL
+- **H2 Database**: In-memory database for development
+- **Micronaut Data JDBC**: Reactive and efficient ORM
+- **JUnit 5**: Modern testing framework
+- **Mockito Kotlin**: Mocking for Kotlin tests
 
-## Características
+## Features
 
-- ✅ **Arquitectura hexagonal** con puertos en dominio
-- ✅ **Separación clara de responsabilidades** por capas
-- ✅ **Inyección de dependencias** con Micronaut
-- ✅ **Validación de datos** con Bean Validation
-- ✅ **Manejo de errores HTTP** mejorado
-- ✅ **Tests unitarios e integración** (70% cobertura)
-- ✅ **Base de datos H2** con inicialización automática
-- ✅ **Logging estructurado** para monitoreo
-- ✅ **Virtual Threads (Java 21)** para notificaciones asíncronas
-- ✅ **Pattern matching mejorado** para manejo de errores
-- ✅ **Código moderno** aprovechando características de Java 21
+- ✅ **Hexagonal architecture** with ports in domain
+- ✅ **Clear separation of responsibilities** by layers
+- ✅ **Dependency injection** with Micronaut
+- ✅ **Data validation** with Bean Validation
+- ✅ **Enhanced HTTP error handling**
+- ✅ **Unit and integration tests** (70% coverage)
+- ✅ **H2 database** with automatic initialization
+- ✅ **Structured logging** for monitoring
 
 ## Endpoints API
 
 ### Roles
-- `POST /api/v1/roles` - Crear rol
-- `GET /api/v1/roles` - Obtener todos los roles
-- `GET /api/v1/roles/{id}` - Obtener rol por ID
-- `PUT /api/v1/roles/{id}` - Actualizar rol
-- `DELETE /api/v1/roles/{id}` - Eliminar rol
-- `GET /api/v1/roles/search?name={pattern}` - Buscar roles por patrón
-- `GET /api/v1/roles/count` - Contar roles
+- `POST /api/v1/roles` - Create role
+- `GET /api/v1/roles` - Get all roles
+- `GET /api/v1/roles/{id}` - Get role by ID
+- `PUT /api/v1/roles/{id}` - Update role
+- `DELETE /api/v1/roles/{id}` - Delete role
+- `GET /api/v1/roles/search?name={pattern}` - Search roles by pattern
+- `GET /api/v1/roles/count` - Count roles
 
-## Ejecución
+## Execution
 
-### Requisitos
-- **Java 21+** (recomendado para aprovechar Virtual Threads y nuevas características)
-- **Gradle 8+** con soporte para Kotlin DSL
+### Requirements
+- **Java 17+** (21+ recommended to leverage Virtual Threads and new features)
+- **Gradle 8+** with Kotlin DSL support
 
-### Comandos
+### Commands
 
 ```bash
-# Compilar
 ./gradlew build
 
-# Ejecutar tests
 ./gradlew test
 
-# Ejecutar aplicación
 ./gradlew run
-
-# Generar reporte de cobertura
-./gradlew jacocoTestReport
 ```
 
-La aplicación se ejecuta en `http://localhost:8081`
+The application runs on `http://localhost:8081`
 
-## Ejemplos de Uso
+## Usage Examples
 
-### Crear un rol
+### Create a role
 ```bash
 curl -X POST http://localhost:8081/api/v1/roles \
   -H "Content-Type: application/json" \
   -d '{"name": "DEVELOPER"}'
 ```
 
-### Obtener todos los roles
+### Get all roles
 ```bash
 curl http://localhost:8081/api/v1/roles
 ```
 
-### Buscar roles
+### Search roles
 ```bash
 curl "http://localhost:8081/api/v1/roles/search?name=ADMIN"
 ```
 
-## Principios de Diseño
+## Design Principles
 
-1. **Inversión de Dependencias**: El dominio no depende de la infraestructura
-2. **Separación de Responsabilidades**: Cada capa tiene una responsabilidad específica
-3. **Testabilidad**: Fácil testing mediante mocking de puertos
-4. **Flexibilidad**: Fácil intercambio de adaptadores de infraestructura
-5. **Mantenibilidad**: Código limpio y bien estructurado
-6. **Performance Moderna**: Uso de Virtual Threads para operaciones asíncronas
-7. **Robustez**: Manejo de errores mejorado con pattern matching
-8. **Escalabilidad**: Arquitectura preparada para microservicios
+1. **Dependency Inversion**: Domain doesn't depend on infrastructure
+2. **Separation of Concerns**: Each layer has a specific responsibility
+3. **Testability**: Easy testing through port mocking
+4. **Flexibility**: Easy swapping of infrastructure adapters
+5. **Maintainability**: Clean and well-structured code
+6. **Modern Performance**: Use of Virtual Threads for asynchronous operations
+7. **Robustness**: Enhanced error handling with pattern matching
+8. **Scalability**: Architecture ready for microservices
 
-## Características de Java 21 Implementadas
+<!--
+## Java 21 Features Implemented
 
-### Virtual Threads
-- **Notificaciones asíncronas**: Las notificaciones a sistemas externos se ejecutan en Virtual Threads para mejor rendimiento
-- **No bloqueo**: Las operaciones de I/O no bloquean el hilo principal
-- **Escalabilidad**: Soporte para miles de operaciones concurrentes con bajo overhead
-
-### Pattern Matching Mejorado
-- **Manejo de errores**: Uso de `when` expressions para manejo elegante de excepciones
-- **Código más limpio**: Menos boilerplate en el manejo de diferentes tipos de errores
-- **Mejor legibilidad**: Lógica de control más expresiva
-
-### Ejemplo de Virtual Threads:
+### Virtual Threads Example:
 ```kotlin
-// Notificación asíncrona sin bloquear el hilo principal
+// Asynchronous notification without blocking the main thread
 Thread.startVirtualThread {
     try {
         notificationPort.notifyRoleCreated(savedRole)
@@ -145,9 +127,9 @@ Thread.startVirtualThread {
 }
 ```
 
-### Ejemplo de Pattern Matching:
+### Pattern Matching Example:
 ```kotlin
-// Manejo elegante de múltiples tipos de excepción
+// Elegant handling of multiple exception types
 when (e) {
     is RoleNotFoundException -> HttpResponse.notFound()
     is RoleAlreadyExistsException -> HttpResponse.status(HttpStatus.CONFLICT)
@@ -155,12 +137,4 @@ when (e) {
     else -> HttpResponse.serverError()
 }
 ```
-
-## Cobertura de Tests
-
-El proyecto mantiene una cobertura de tests del 70% aproximadamente, incluyendo:
-- Tests unitarios de dominio
-- Tests de servicios
-- Tests de mappers
-- Tests de adaptadores
-- Tests de integración mínimos
+-->
