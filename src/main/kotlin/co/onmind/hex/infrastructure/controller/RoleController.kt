@@ -1,4 +1,4 @@
-package co.onmind.hex.infrastructure.controllers
+package co.onmind.hex.infrastructure.controller
 
 import co.onmind.hex.application.dto.CreateRoleRequest
 import co.onmind.hex.application.dto.RoleResponse

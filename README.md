@@ -26,7 +26,7 @@ src/
 │   │   ├── mapper/          # Mappers between domain and DTOs
 │   │   └── handler/         # Handlers or application use cases (RoleHandler)
 │   └── infrastructure/
-│       ├── controllers/     # Framework controller endpoints (RoleController)
+│       ├── controller/      # Framework controller or end-points (RoleController)
 │       ├── persistence/     # Database persistence adapters
 │       └── webclient/       # Web client adapters
 └── test/kotlin/             # Unit and integration tests
@@ -49,7 +49,7 @@ src/
 - ✅ **Dependency injection** with Micronaut
 - ✅ **Data validation** with Bean Validation
 - ✅ **Enhanced HTTP error handling**
-- ✅ **Unit and integration tests** (70% coverage)
+- ✅ **Unit and integration tests** (75%+ coverage)
 - ✅ **H2 database** with automatic initialization
 - ✅ **Structured logging** for monitoring
 
@@ -67,38 +67,45 @@ src/
 ## Execution
 
 ### Requirements
-- **Java 17+** (21+ recommended to leverage Virtual Threads and new features)
+- **Java 17+** (21+ recommended to leverage new features)
 - **Gradle 8+** with Kotlin DSL support
 
 ### Commands
 
 ```bash
+# Build project
 ./gradlew build
 
+# Run tests
 ./gradlew test
 
+# Run application
 ./gradlew run
+
+# Generate coverage report
+./gradlew test jacocoTestReport
 ```
 
-The application runs on `http://localhost:8081`
+> The application runs on `http://localhost:8080`  
+> Jacoco Reports on: `ca`
 
 ## Usage Examples
 
 ### Create a role
 ```bash
-curl -X POST http://localhost:8081/api/v1/roles \
+curl -X POST http://localhost:8080/api/v1/roles \
   -H "Content-Type: application/json" \
   -d '{"name": "DEVELOPER"}'
 ```
 
 ### Get all roles
 ```bash
-curl http://localhost:8081/api/v1/roles
+curl http://localhost:8080/api/v1/roles
 ```
 
 ### Search roles
 ```bash
-curl "http://localhost:8081/api/v1/roles/search?name=ADMIN"
+curl "http://localhost:8080/api/v1/roles/search?name=ADMIN"
 ```
 
 ## Design Principles
@@ -108,33 +115,5 @@ curl "http://localhost:8081/api/v1/roles/search?name=ADMIN"
 3. **Testability**: Easy testing through port mocking
 4. **Flexibility**: Easy swapping of infrastructure adapters
 5. **Maintainability**: Clean and well-structured code
-6. **Modern Performance**: Use of Virtual Threads for asynchronous operations
-7. **Robustness**: Enhanced error handling with pattern matching
-8. **Scalability**: Architecture ready for microservices
-
-<!--
-## Java 21 Features Implemented
-
-### Virtual Threads Example:
-```kotlin
-// Asynchronous notification without blocking the main thread
-Thread.startVirtualThread {
-    try {
-        notificationPort.notifyRoleCreated(savedRole)
-    } catch (e: Exception) {
-        println("Failed to send notification: ${e.message}")
-    }
-}
-```
-
-### Pattern Matching Example:
-```kotlin
-// Elegant handling of multiple exception types
-when (e) {
-    is RoleNotFoundException -> HttpResponse.notFound()
-    is RoleAlreadyExistsException -> HttpResponse.status(HttpStatus.CONFLICT)
-    is SystemRoleException -> HttpResponse.status(HttpStatus.FORBIDDEN)
-    else -> HttpResponse.serverError()
-}
-```
--->
+6. **Robustness**: Enhanced error handling with pattern matching
+7. **Scalability**: Architecture ready for microservices

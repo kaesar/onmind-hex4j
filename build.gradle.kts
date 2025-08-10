@@ -4,6 +4,7 @@ plugins {
     id("com.google.devtools.ksp") version "1.9.10-1.0.13"
     id("com.github.johnrengelman.shadow") version "8.1.1"
     id("io.micronaut.application") version "4.2.1"
+    jacoco
 }
 
 version = "0.1"
@@ -64,6 +65,15 @@ tasks {
         kotlinOptions {
             jvmTarget = "17"
         }
+    }
+    jacocoTestReport {
+        reports {
+            xml.required.set(true)
+            html.required.set(true)
+        }
+    }
+    test {
+        finalizedBy(jacocoTestReport)
     }
 }
 
