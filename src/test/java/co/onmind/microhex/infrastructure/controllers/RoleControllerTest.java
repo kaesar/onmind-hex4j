@@ -1,158 +1,274 @@
 package co.onmind.microhex.infrastructure.controllers;
 
-import co.onmind.microhex.application.dto.in.CreateRoleRequestDto;
-import co.onmind.microhex.application.dto.out.RoleResponseDto;
-import co.onmind.microhex.application.ports.in.CreateRoleTrait;
-import co.onmind.microhex.application.ports.in.GetRoleTrait;
-import co.onmind.microhex.domain.exceptions.DuplicateRoleException;
-import co.onmind.microhex.domain.exceptions.RoleNotFoundException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import co.onmind.microhex.application.dto.CreateRoleRequest;
+import co.onmind.microhex.application.dto.RoleResponse;
+import co.onmind.microhex.application.dto.UpdateRoleRequest;
+import co.onmind.microhex.application.handlers.RoleHandler;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.http.MediaType;
-import org.springframework.test.web.servlet.MockMvc;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /**
  * Unit tests for RoleController.
  * 
- * These tests verify the REST controller behavior including:
- * - Successful operations
- * - Error handling
- * - Input validation
- * - HTTP status codes
- * 
  * @author OnMind (Cesar Andres Arcila Buitrago)
- * @version 1.0.0
+ * @version 2.0.0
  */
-@SpringBootTest
-@AutoConfigureTestDatabase
-@AutoConfigureMockMvc
+@ExtendWith(MockitoExtension.class)
+@DisplayName("Role Controller Tests")
 class RoleControllerTest {
     
-    @Autowired
-    private MockMvc mockMvc;
+    @Mock
+    private RoleHandler roleHandler;
     
-    @Autowired
-    private ObjectMapper objectMapper;
+    @InjectMocks
+    private RoleController roleController;
     
-    @MockBean
-    private CreateRoleTrait createRoleTrait;
-    
-    @MockBean
-    private GetRoleTrait getRoleTrait;
-
-    @Test
-    void createRole_WithValidRequest_ShouldReturnCreatedRole() throws Exception {
-        // Given
-        CreateRoleRequestDto request = new CreateRoleRequestDto("ADMIN");
-        RoleResponseDto response = new RoleResponseDto(1L, "ADMIN", LocalDateTime.now());
+    @Nested
+    @DisplayName("Create Role Tests")
+    class CreateRoleTests {
         
-        when(createRoleTrait.createRole(any(CreateRoleRequestDto.class))).thenReturn(response);
+        @Test
+        @DisplayName("Should create role successfully")
+        void shouldCreateRoleSuccessfully() {
+            // Given
+            CreateRoleRequest request = new CreateRoleRequest("ADMIN");
+            RoleResponse response = new RoleResponse(1L, "ADMIN", LocalDateTime.now());
+            
+            when(roleHandler.createRole(any(CreateRoleRequest.class)))
+                .thenReturn(ResponseEntity.status(HttpStatus.CREATED).body(response));
+            
+            // When
+            ResponseEntity<RoleResponse> result = roleController.createRole(request);
+            
+            // Then
+            assertEquals(HttpStatus.CREATED, result.getStatusCode());
+            assertNotNull(result.getBody());
+            assertEquals(1L, result.getBody().getId());
+            assertEquals("ADMIN", result.getBody().getName());
+        }
         
-        // When & Then
-        mockMvc.perform(post("/api/v1/roles")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.id").value(1L))
-                .andExpect(jsonPath("$.name").value("ADMIN"));
+        @Test
+        @DisplayName("Should return conflict when role already exists")
+        void shouldReturnConflictWhenRoleAlreadyExists() {
+            // Given
+            CreateRoleRequest request = new CreateRoleRequest("ADMIN");
+            
+            when(roleHandler.createRole(any(CreateRoleRequest.class)))
+                .thenReturn(ResponseEntity.status(HttpStatus.CONFLICT).build());
+            
+            // When
+            ResponseEntity<RoleResponse> result = roleController.createRole(request);
+            
+            // Then
+            assertEquals(HttpStatus.CONFLICT, result.getStatusCode());
+            assertNull(result.getBody());
+        }
     }
     
-    @Test
-    void createRole_WithBlankName_ShouldReturnBadRequest() throws Exception {
-        // Given
-        CreateRoleRequestDto request = new CreateRoleRequestDto("");
+    @Nested
+    @DisplayName("Update Role Tests")
+    class UpdateRoleTests {
         
-        // When & Then
-        mockMvc.perform(post("/api/v1/roles")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+        @Test
+        @DisplayName("Should update role successfully")
+        void shouldUpdateRoleSuccessfully() {
+            // Given
+            Long roleId = 1L;
+            UpdateRoleRequest request = new UpdateRoleRequest("UPDATED_ADMIN");
+            RoleResponse response = new RoleResponse(roleId, "UPDATED_ADMIN", LocalDateTime.now());
+            
+            when(roleHandler.updateRole(anyLong(), any(UpdateRoleRequest.class)))
+                .thenReturn(ResponseEntity.ok(response));
+            
+            // When
+            ResponseEntity<RoleResponse> result = roleController.updateRole(roleId, request);
+            
+            // Then
+            assertEquals(HttpStatus.OK, result.getStatusCode());
+            assertNotNull(result.getBody());
+            assertEquals(roleId, result.getBody().getId());
+            assertEquals("UPDATED_ADMIN", result.getBody().getName());
+        }
+        
+        @Test
+        @DisplayName("Should return not found when role does not exist")
+        void shouldReturnNotFoundWhenRoleDoesNotExist() {
+            // Given
+            Long roleId = 999L;
+            UpdateRoleRequest request = new UpdateRoleRequest("NEW_NAME");
+            
+            when(roleHandler.updateRole(anyLong(), any(UpdateRoleRequest.class)))
+                .thenReturn(ResponseEntity.notFound().build());
+            
+            // When
+            ResponseEntity<RoleResponse> result = roleController.updateRole(roleId, request);
+            
+            // Then
+            assertEquals(HttpStatus.NOT_FOUND, result.getStatusCode());
+            assertNull(result.getBody());
+        }
     }
     
-    @Test
-    void createRole_WithDuplicateName_ShouldReturnConflict() throws Exception {
-        // Given
-        CreateRoleRequestDto request = new CreateRoleRequestDto("ADMIN");
+    @Nested
+    @DisplayName("Delete Role Tests")
+    class DeleteRoleTests {
         
-        when(createRoleTrait.createRole(any(CreateRoleRequestDto.class)))
-                .thenThrow(DuplicateRoleException.forName("ADMIN"));
+        @Test
+        @DisplayName("Should delete role successfully")
+        void shouldDeleteRoleSuccessfully() {
+            // Given
+            Long roleId = 1L;
+            
+            when(roleHandler.deleteRole(anyLong()))
+                .thenReturn(ResponseEntity.noContent().build());
+            
+            // When
+            ResponseEntity<Void> result = roleController.deleteRole(roleId);
+            
+            // Then
+            assertEquals(HttpStatus.NO_CONTENT, result.getStatusCode());
+            assertNull(result.getBody());
+        }
         
-        // When & Then
-        mockMvc.perform(post("/api/v1/roles")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("CONFLICT"))
-                .andExpect(jsonPath("$.message").value("Role with name 'ADMIN' already exists"));
+        @Test
+        @DisplayName("Should return not found when role does not exist")
+        void shouldReturnNotFoundWhenRoleDoesNotExist() {
+            // Given
+            Long roleId = 999L;
+            
+            when(roleHandler.deleteRole(anyLong()))
+                .thenReturn(ResponseEntity.notFound().build());
+            
+            // When
+            ResponseEntity<Void> result = roleController.deleteRole(roleId);
+            
+            // Then
+            assertEquals(HttpStatus.NOT_FOUND, result.getStatusCode());
+        }
     }
     
-    @Test
-    void getAllRoles_ShouldReturnAllRoles() throws Exception {
-        // Given
-        List<RoleResponseDto> roles = Arrays.asList(
-                new RoleResponseDto(1L, "ADMIN", LocalDateTime.now()),
-                new RoleResponseDto(2L, "USER", LocalDateTime.now())
-        );
+    @Nested
+    @DisplayName("Get Role Tests")
+    class GetRoleTests {
         
-        when(getRoleTrait.getAllRoles()).thenReturn(roles);
+        @Test
+        @DisplayName("Should get role by id successfully")
+        void shouldGetRoleByIdSuccessfully() {
+            // Given
+            Long roleId = 1L;
+            RoleResponse response = new RoleResponse(roleId, "ADMIN", LocalDateTime.now());
+            
+            when(roleHandler.getRoleById(anyLong()))
+                .thenReturn(ResponseEntity.ok(response));
+            
+            // When
+            ResponseEntity<RoleResponse> result = roleController.getRoleById(roleId);
+            
+            // Then
+            assertEquals(HttpStatus.OK, result.getStatusCode());
+            assertNotNull(result.getBody());
+            assertEquals(roleId, result.getBody().getId());
+            assertEquals("ADMIN", result.getBody().getName());
+        }
         
-        // When & Then
-        mockMvc.perform(get("/api/v1/roles"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(2))
-                .andExpect(jsonPath("$[0].name").value("ADMIN"))
-                .andExpect(jsonPath("$[1].name").value("USER"));
-    }
-    
-    @Test
-    void getRoleById_WithValidId_ShouldReturnRole() throws Exception {
-        // Given
-        RoleResponseDto role = new RoleResponseDto(1L, "ADMIN", LocalDateTime.now());
+        @Test
+        @DisplayName("Should return not found when role does not exist")
+        void shouldReturnNotFoundWhenRoleDoesNotExist() {
+            // Given
+            Long roleId = 999L;
+            
+            when(roleHandler.getRoleById(anyLong()))
+                .thenReturn(ResponseEntity.notFound().build());
+            
+            // When
+            ResponseEntity<RoleResponse> result = roleController.getRoleById(roleId);
+            
+            // Then
+            assertEquals(HttpStatus.NOT_FOUND, result.getStatusCode());
+            assertNull(result.getBody());
+        }
         
-        when(getRoleTrait.getRoleById(eq(1L))).thenReturn(role);
+        @Test
+        @DisplayName("Should get all roles successfully")
+        void shouldGetAllRolesSuccessfully() {
+            // Given
+            List<RoleResponse> responses = Arrays.asList(
+                new RoleResponse(1L, "ADMIN", LocalDateTime.now()),
+                new RoleResponse(2L, "USER", LocalDateTime.now())
+            );
+            
+            when(roleHandler.getAllRoles())
+                .thenReturn(ResponseEntity.ok(responses));
+            
+            // When
+            ResponseEntity<List<RoleResponse>> result = roleController.getAllRoles();
+            
+            // Then
+            assertEquals(HttpStatus.OK, result.getStatusCode());
+            assertNotNull(result.getBody());
+            assertEquals(2, result.getBody().size());
+            assertEquals("ADMIN", result.getBody().get(0).getName());
+            assertEquals("USER", result.getBody().get(1).getName());
+        }
         
-        // When & Then
-        mockMvc.perform(get("/api/v1/roles/1"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value(1L))
-                .andExpect(jsonPath("$.name").value("ADMIN"));
-    }
-    
-    @Test
-    void getRoleById_WithNonExistentId_ShouldReturnNotFound() throws Exception {
-        // Given
-        when(getRoleTrait.getRoleById(eq(999L)))
-                .thenThrow(RoleNotFoundException.forId(999L));
+        @Test
+        @DisplayName("Should search roles successfully")
+        void shouldSearchRolesSuccessfully() {
+            // Given
+            String searchPattern = "ADMIN";
+            List<RoleResponse> responses = Arrays.asList(
+                new RoleResponse(1L, "ADMIN", LocalDateTime.now()),
+                new RoleResponse(2L, "SUPER_ADMIN", LocalDateTime.now())
+            );
+            
+            when(roleHandler.searchRoles(anyString()))
+                .thenReturn(ResponseEntity.ok(responses));
+            
+            // When
+            ResponseEntity<List<RoleResponse>> result = roleController.searchRoles(searchPattern);
+            
+            // Then
+            assertEquals(HttpStatus.OK, result.getStatusCode());
+            assertNotNull(result.getBody());
+            assertEquals(2, result.getBody().size());
+            assertEquals("ADMIN", result.getBody().get(0).getName());
+            assertEquals("SUPER_ADMIN", result.getBody().get(1).getName());
+        }
         
-        // When & Then
-        mockMvc.perform(get("/api/v1/roles/999"))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value("NOT_FOUND"))
-                .andExpect(jsonPath("$.message").value("Role with ID 999 not found"));
-    }
-    
-    @Test
-    void getRoleById_WithInvalidId_ShouldReturnBadRequest() throws Exception {
-        // When & Then
-        mockMvc.perform(get("/api/v1/roles/0"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
-                .andExpect(jsonPath("$.message").value("Role ID must be a positive number"));
+        @Test
+        @DisplayName("Should get role count successfully")
+        void shouldGetRoleCountSuccessfully() {
+            // Given
+            Map<String, Long> countResponse = Map.of("count", 5L);
+            
+            when(roleHandler.getRoleCount())
+                .thenReturn(ResponseEntity.ok(countResponse));
+            
+            // When
+            ResponseEntity<Map<String, Long>> result = roleController.getRoleCount();
+            
+            // Then
+            assertEquals(HttpStatus.OK, result.getStatusCode());
+            assertNotNull(result.getBody());
+            assertEquals(5L, result.getBody().get("count"));
+        }
     }
 }

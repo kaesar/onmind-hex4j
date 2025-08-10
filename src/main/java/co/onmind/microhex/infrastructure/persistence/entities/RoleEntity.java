@@ -8,60 +8,41 @@ import java.util.Objects;
  * JPA Entity for Role persistence.
  * 
  * This entity represents the role table in the database and handles
- * the persistence mapping for the Role domain model. It follows JPA
- * conventions and includes appropriate constraints and indexes.
+ * the persistence concerns for roles. It's separate from the domain
+ * model to maintain clean architecture principles.
  * 
  * @author OnMind (Cesar Andres Arcila Buitrago)
  * @version 1.0.0
  */
 @Entity
-@Table(name = "roles", indexes = {
-    @Index(name = "idx_role_name", columnList = "name")
+@Table(name = "roles", uniqueConstraints = {
+    @UniqueConstraint(columnNames = "name", name = "uk_role_name")
 })
 public class RoleEntity {
     
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "id")
     private Long id;
     
-    @Column(name = "name", nullable = false, unique = true, length = 100)
+    @Column(name = "name", nullable = false, length = 100)
     private String name;
     
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
     
-    /**
-     * Default constructor required by JPA.
-     */
     public RoleEntity() {}
     
-    /**
-     * Constructor for creating a new role entity.
-     * 
-     * @param name The name of the role
-     */
     public RoleEntity(String name) {
         this.name = name;
         this.createdAt = LocalDateTime.now();
     }
     
-    /**
-     * Full constructor for creating a role entity with all fields.
-     * 
-     * @param id The unique identifier
-     * @param name The name of the role
-     * @param createdAt The creation timestamp
-     */
     public RoleEntity(Long id, String name, LocalDateTime createdAt) {
         this.id = id;
         this.name = name;
         this.createdAt = createdAt;
     }
     
-    /**
-     * JPA PrePersist callback to set creation timestamp.
-     */
     @PrePersist
     protected void onCreate() {
         if (createdAt == null) {

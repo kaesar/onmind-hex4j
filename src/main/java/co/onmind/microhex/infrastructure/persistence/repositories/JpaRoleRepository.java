@@ -65,6 +65,14 @@ public interface JpaRoleRepository extends JpaRepository<RoleEntity, Long> {
     java.util.List<RoleEntity> findByNameContaining(@Param("namePattern") String namePattern);
     
     /**
+     * Finds roles by name containing a specific substring (case-insensitive).
+     * 
+     * @param namePattern The pattern to search for in role names
+     * @return List of role entities matching the pattern
+     */
+    java.util.List<RoleEntity> findByNameContainingIgnoreCase(String namePattern);
+    
+    /**
      * Custom query to count roles created after a specific date.
      * This demonstrates more complex custom queries.
      * 

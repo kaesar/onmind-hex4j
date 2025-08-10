@@ -2,18 +2,21 @@ package co.onmind.microhex.domain.models;
 
 import java.time.LocalDateTime;
 import java.util.Objects;
+import java.util.Set;
 
 /**
- * Role domain model representing a role entity in the system.
+ * Role domain model representing a user role in the system.
  * 
- * This class contains the core business logic and validation rules for roles.
- * It follows domain-driven design principles by encapsulating business rules
- * and maintaining data integrity.
+ * This is the core domain entity that encapsulates the business logic
+ * and rules for roles. It follows the hexagonal architecture principles
+ * by being independent of external frameworks and infrastructure.
  * 
  * @author OnMind (Cesar Andres Arcila Buitrago)
  * @version 1.0.0
  */
 public class Role {
+    
+    private static final Set<String> RESERVED_NAMES = Set.of("ADMIN", "ROOT", "SYSTEM");
     
     private Long id;
     private String name;
@@ -22,14 +25,56 @@ public class Role {
     public Role() {}
     
     public Role(String name) {
-        this.name = name;
+        validateName(name);
+        this.name = name.trim().toUpperCase();
         this.createdAt = LocalDateTime.now();
     }
     
     public Role(Long id, String name, LocalDateTime createdAt) {
+        validateName(name);
         this.id = id;
-        this.name = name;
-        this.createdAt = createdAt;
+        this.name = name.trim().toUpperCase();
+        this.createdAt = createdAt != null ? createdAt : LocalDateTime.now();
+    }
+    
+    /**
+     * Factory method to create a new role with normalized name.
+     * @param name the role name
+     * @return a new Role instance
+     */
+    public static Role create(String name) {
+        return new Role(name);
+    }
+    
+    /**
+     * Validates if this role is a system role that cannot be deleted.
+     * @return true if it's a system role
+     */
+    public boolean isSystemRole() {
+        return name != null && (name.startsWith("SYSTEM_") || RESERVED_NAMES.contains(name));
+    }
+    
+    /**
+     * Creates a copy of this role with updated name.
+     * @param newName the new name
+     * @return a new Role instance with the updated name
+     */
+    public Role withName(String newName) {
+        return new Role(this.id, newName, this.createdAt);
+    }
+    
+    /**
+     * Validates the role name according to business rules.
+     * @param name the name to validate
+     * @throws IllegalArgumentException if the name is invalid
+     */
+    private void validateName(String name) {
+        if (name == null || name.trim().isEmpty()) {
+            throw new IllegalArgumentException("Role name cannot be blank");
+        }
+        if (name.length() > 100) {
+            throw new IllegalArgumentException("Role name cannot exceed 100 characters");
+        }
     }
     
     // Getters and Setters

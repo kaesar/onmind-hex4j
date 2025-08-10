@@ -1,56 +1,72 @@
-# Hexagonal Architecture Template for Java
+# Hex4j - Hexagonal Architecture with Java and Spring Boot
 
-This project demonstrates a complete implementation of hexagonal architecture (Ports and Adapters pattern) using Java and Spring Boot.
+This project implements a hexagonal architecture approach using Java 21, Spring Boot Framework and Gradle, with a variation where ports are located in the domain layer.
 
-## Architecture Overview
+## Architecture
 
-![](Hexagonal.png)
+### Hexagonal Architecture Variation
 
-The project follows the hexagonal architecture pattern with clear separation of concerns:
+This implementation presents a variation of traditional hexagonal architecture:
 
-- **Domain Layer**: Contains business logic and domain models
-- **Application Layer**: Contains use cases and defines ports (interfaces)
-- **Infrastructure Layer**: Contains adapters that implement the ports
+- **Domain**: Contains ports (interfaces) and domain service with command and query operations, plus the model
+- **Application**: Acts as orchestrator with application handlers and mappers, injecting the service through the input port to access the domain service
+- **Infrastructure**: Implements adapters that connect with external systems
 
-## Project Structure
+### Project Structure
 
 ```
 src/main/java/co/onmind/microhex/
 ├── domain/
-│   ├── models/         # Domain entities and value objects
-│   └── services/       # Domain services with business logic
+│   ├── models/          # Domain models (Role)
+│   ├── ports/           # Ports/Interfaces (RoleServicePort, RoleRepositoryPort, NotificationPort)
+│   │   ├── in/          # Input ports (RoleServicePort)
+│   │   └── out/         # Output ports (RoleRepositoryPort, NotificationPort)
+│   ├── services/        # Domain services (RoleService)
+│   └── exceptions/      # Domain exceptions
 ├── application/
-│   ├── dto/
-│   │   ├── in/         # Input DTOs
-│   │   └── out/        # Output DTOs
-│   ├── mappers/        # MapStruct mappers
-│   ├── usecases/       # Use case implementations
-│   └── ports/
-│       ├── in/         # Input ports (interfaces)
-│       └── out/        # Output ports (interfaces)
+│   ├── dto/             # DTOs for requests/responses
+│   ├── mappers/         # Mappers between domain and DTOs
+│   └── handlers/        # Handlers or application use cases (RoleHandler)
 ├── infrastructure/
-│   ├── configuration/  # Spring configurations
-│   ├── controllers/    # REST controllers
-│   ├── persistence/    # JPA entities and repositories
-│   └── webclients/     # External service clients
-└── transverse/         # Cross-cutting concerns
+│   ├── controllers/     # REST controllers or end-points (RoleController)
+│   ├── persistence/     # Database persistence adapters
+│   ├── notification/    # Notification adapters
+│   └── configuration/   # Spring configurations
+└── transverse/          # Cross-cutting concerns
 ```
 
-## Technologies Used
+## Technologies
 
-- **Java 21**
-- **Spring Boot 3.5.4** - Main framework
-- **H2 Database** - In-memory database for development
-- **MapStruct 1.5.5** - Object mapping
-- **JUnit 5** - Testing framework
-- **Gradle** - Build tool
+- **Java 21**: Modern programming language with Virtual Threads support
+- **Spring Boot 3.5.4**: Reactive and lightweight web framework
+- **Gradle**: Dependency manager and build tool
+- **H2 Database**: In-memory database for development
+- **JUnit 5**: Modern testing framework
+- **Bean Validation**: Data validation framework
 
-## Getting Started
+## Features
 
-### Prerequisites
+- ✅ **Hexagonal architecture** with ports in domain
+- ✅ **Clear separation of responsibilities** by layers
+- ✅ **Dependency injection** with Spring Boot
+- ✅ **Data validation** with Bean Validation
+- ✅ **Enhanced HTTP error handling**
+- ✅ **H2 database** with automatic initialization
+- ✅ **Structured logging** for monitoring
+- ✅ **Virtual Threads** for async notifications (Java 21)
 
-- Java 21 or higher
-- Gradle (or use the included wrapper)
+## Features
+
+- ✅ **Hexagonal architecture** with ports in domain
+- ✅ **Clear separation of responsibilities** by layers
+- ✅ **Dependency injection** with Micronaut
+- ✅ **Data validation** with Bean Validation
+- ✅ **Enhanced HTTP error handling**
+- ✅ **Unit and integration tests** (75%+ coverage)
+- ✅ **H2 database** with automatic initialization
+- ✅ **Structured logging** for monitoring
+
+## Endpoints API
 
 ### Running the Application
 
@@ -91,36 +107,102 @@ The template includes a complete Role management example demonstrating:
 - JPA persistence
 - Comprehensive testing
 -->
-## API Endpoints (Coming in next tasks)
+## Endpoints API
 
-- `POST /api/v1/roles` - Create a new role
+### Roles
+- `POST /api/v1/roles` - Create role
 - `GET /api/v1/roles` - Get all roles
 - `GET /api/v1/roles/{id}` - Get role by ID
+- `PUT /api/v1/roles/{id}` - Update role
+- `DELETE /api/v1/roles/{id}` - Delete role
+- `GET /api/v1/roles/search?name={pattern}` - Search roles by pattern
+- `GET /api/v1/roles/count` - Count roles
 
-## Extending the Template
+## Usage Examples
 
-To add a new entity (e.g., User):
+### Create a role
+```bash
+curl -X POST http://localhost:8080/api/v1/roles \
+  -H "Content-Type: application/json" \
+  -d '{"name": "DEVELOPER"}'
+```
+
+### Get all roles
+```bash
+curl http://localhost:8080/api/v1/roles
+```
+
+### Search roles
+```bash
+curl "http://localhost:8080/api/v1/roles/search?name=ADMIN"
+```
+
+## Design Principles
+
+1. **Dependency Inversion**: Domain doesn't depend on infrastructure
+2. **Separation of Concerns**: Each layer has a specific responsibility
+3. **Testability**: Easy testing through port mocking
+4. **Flexibility**: Easy swapping of infrastructure adapters
+5. **Maintainability**: Clean and well-structured code
+6. **Robustness**: Enhanced error handling with proper exceptions
+7. **Scalability**: Architecture ready for microservices
+
+## Execution
+
+### Requirements
+- **Java 21+** (recommended to leverage new features)
+- **Gradle 8+** with Kotlin DSL support
 
 1. Create domain model in `domain/models/`
-2. Create domain service in `domain/services/`
-3. Define input/output DTOs in `application/dto/`
-4. Create mapper in `application/mappers/`
-5. Define ports in `application/ports/`
-6. Implement use cases in `application/usecases/`
-7. Create JPA entity in `infrastructure/persistence/`
-8. Implement repository adapter
-9. Create REST controller in `infrastructure/controllers/`
-10. Add comprehensive tests
+2. Create domain exceptions in `domain/exceptions/`
+3. Define input/output ports in `domain/ports/`
+4. Create domain service in `domain/services/`
+5. Define DTOs in `application/dto/`
+6. Create mapper in `application/mappers/`
+7. Implement handler in `application/handlers/`
+8. Create JPA entity in `infrastructure/persistence/entities/`
+9. Implement repository adapter in `infrastructure/persistence/adapters/`
+10. Create REST controller in `infrastructure/controllers/`
+11. Add comprehensive tests
 
-## Best Practices
+```bash
+# Build application
+./gradlew build
 
-- Keep domain layer pure (no external dependencies)
-- Use dependency inversion (depend on abstractions)
-- Implement comprehensive testing at all layers
-- Follow SOLID principles
-- Use meaningful package structure
-<!--
-## License
+# Run application
+./gradlew bootRun
 
-This template is provided as-is for educational and development purposes.
--->
+# Generate coverage report
+./gradlew test jacocoTestReport
+```
+
+> The application runs on `http://localhost:8080`  
+
+## Usage Examples
+
+### Create a role
+```bash
+curl -X POST http://localhost:8080/api/v1/roles \
+  -H "Content-Type: application/json" \
+  -d '{"name": "DEVELOPER"}'
+```
+
+### Get all roles
+```bash
+curl http://localhost:8080/api/v1/roles
+```
+
+### Search roles
+```bash
+curl "http://localhost:8080/api/v1/roles/search?name=ADMIN"
+```
+
+## Design Principles
+
+1. **Dependency Inversion**: Domain doesn't depend on infrastructure
+2. **Separation of Concerns**: Each layer has a specific responsibility
+3. **Testability**: Easy testing through port mocking
+4. **Flexibility**: Easy swapping of infrastructure adapters
+5. **Maintainability**: Clean and well-structured code
+6. **Robustness**: Enhanced error handling with pattern matching
+7. **Scalability**: Architecture ready for microservices

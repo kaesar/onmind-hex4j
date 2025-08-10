@@ -1,0 +1,12 @@
+-- Create roles table
+CREATE TABLE IF NOT EXISTS roles (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Insert some initial data
+INSERT INTO roles (name, created_at) VALUES 
+    ('ADMIN', CURRENT_TIMESTAMP),
+    ('USER', CURRENT_TIMESTAMP),
+    ('MODERATOR', CURRENT_TIMESTAMP);

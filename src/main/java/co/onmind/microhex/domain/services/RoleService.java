@@ -1,207 +1,181 @@
 package co.onmind.microhex.domain.services;
 
+import co.onmind.microhex.domain.exceptions.RoleAlreadyExistsException;
+import co.onmind.microhex.domain.exceptions.RoleNotFoundException;
+import co.onmind.microhex.domain.exceptions.SystemRoleException;
 import co.onmind.microhex.domain.models.Role;
-import org.springframework.stereotype.Component;
+import co.onmind.microhex.domain.ports.in.RoleServicePort;
+import co.onmind.microhex.domain.ports.out.NotificationPort;
+import co.onmind.microhex.domain.ports.out.RoleRepositoryPort;
+import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 /**
- * Domain service for Role business logic.
+ * Domain service that orchestrates role operations through ports.
  * 
- * This service contains the core business rules and validation logic for roles.
- * It operates on domain models and enforces business constraints independent
- * of any infrastructure concerns.
- * 
- * @author OnMind (Cesar Andres Arcila Buitrago)
- * @version 1.0.0
+ * This service contains the business logic for role management,
+ * including both commands (write operations) and queries (read operations).
+ * It implements the input port and uses output ports to interact with
+ * external systems while maintaining domain independence.
  */
-@Component
-public class RoleService {
-    
+@Service
+public class RoleService implements RoleServicePort {
+
+    private final RoleRepositoryPort roleRepositoryPort;
+    private final NotificationPort notificationPort;
+
+    public RoleService(RoleRepositoryPort roleRepositoryPort, NotificationPort notificationPort) {
+        this.roleRepositoryPort = roleRepositoryPort;
+        this.notificationPort = notificationPort;
+    }
+
+    // ========== COMMANDS (Write Operations) ==========
+
     /**
-     * Creates a new role with the specified name.
-     * 
-     * This method encapsulates the business logic for role creation,
-     * including validation and setting default values.
-     * 
-     * @param name the role name
-     * @return a new Role instance
-     * @throws IllegalArgumentException if the name is invalid
+     * Creates a new role in the system.
      */
+    @Override
     public Role createRole(String name) {
-        validateRoleName(name);
-        
-        Role role = new Role();
-        role.setName(name.trim());
-        role.setCreatedAt(LocalDateTime.now());
-        
-        // Additional business logic can be added here
-        validateRoleBusinessRules(role);
-        
-        return role;
+        String normalizedName = name.trim().toUpperCase();
+
+        // Business rule: Check if role already exists
+        if (roleRepositoryPort.existsByName(normalizedName)) {
+            throw new RoleAlreadyExistsException("Role with name '" + normalizedName + "' already exists");
+        }
+
+        Role role = Role.create(normalizedName);
+        Role savedRole = roleRepositoryPort.save(role);
+
+        // Notify external systems asynchronously using Virtual Threads (Java 21)
+        Thread.startVirtualThread(() -> {
+            try {
+                notificationPort.notifyRoleCreated(savedRole);
+            } catch (Exception e) {
+                // Log error but don't fail the main operation
+                System.err.println("Failed to send notification: " + e.getMessage());
+            }
+        });
+
+        return savedRole;
     }
-    
+
     /**
-     * Updates an existing role with a new name.
-     * 
-     * @param existingRole the role to update
-     * @param newName the new role name
-     * @return the updated role
-     * @throws IllegalArgumentException if the new name is invalid
+     * Updates an existing role's name.
      */
-    public Role updateRole(Role existingRole, String newName) {
-        if (existingRole == null) {
-            throw new IllegalArgumentException("Existing role cannot be null");
+    @Override
+    public Role updateRole(Long id, String newName) {
+        Role existingRole = roleRepositoryPort.findById(id)
+                .orElseThrow(() -> new RoleNotFoundException("Role with ID " + id + " not found"));
+
+        // Business rule: Cannot update system roles
+        if (existingRole.isSystemRole()) {
+            throw new SystemRoleException("Cannot update system role: " + existingRole.getName());
         }
-        
-        validateRoleName(newName);
-        existingRole.setName(newName.trim());
-        validateRoleBusinessRules(existingRole);
-        
-        return existingRole;
+
+        String normalizedName = newName.trim().toUpperCase();
+
+        // Business rule: Check if new name already exists (excluding current role)
+        roleRepositoryPort.findByName(normalizedName).ifPresent(existing -> {
+            if (!existing.getId().equals(id)) {
+                throw new RoleAlreadyExistsException("Role with name '" + normalizedName + "' already exists");
+            }
+        });
+
+        Role updatedRole = existingRole.withName(normalizedName);
+        Role savedRole = roleRepositoryPort.save(updatedRole);
+
+        // Notify external systems asynchronously using Virtual Threads (Java 21)
+        Thread.startVirtualThread(() -> {
+            try {
+                notificationPort.notifyRoleUpdated(savedRole);
+            } catch (Exception e) {
+                System.err.println("Failed to send notification: " + e.getMessage());
+            }
+        });
+
+        return savedRole;
     }
-    
+
     /**
-     * Validates role business rules.
-     * 
-     * This method contains domain-specific validation logic that goes beyond
-     * simple field validation. It enforces business constraints and rules.
-     * 
-     * @param role the role to validate
-     * @throws IllegalArgumentException if business rules are violated
+     * Deletes a role from the system.
      */
-    public void validateRoleBusinessRules(Role role) {
-        if (role == null) {
-            throw new IllegalArgumentException("Role cannot be null");
-        }
-        
-        // Validate the role name using service validation
-        validateRoleName(role.getName());
-        
-        // Additional business rules can be added here
-        validateRoleNameBusinessRules(role.getName());
-        
-        // Ensure the role is in a valid state
-        if (!isRoleActive(role)) {
-            throw new IllegalArgumentException("Role must be in an active state");
-        }
-    }
-    
-    /**
-     * Validates role name according to business rules.
-     * 
-     * @param name the role name to validate
-     * @throws IllegalArgumentException if the name violates business rules
-     */
-    private void validateRoleName(String name) {
-        if (name == null || name.trim().isEmpty()) {
-            throw new IllegalArgumentException("Role name cannot be null or empty");
-        }
-        
-        String trimmedName = name.trim();
-        
-        if (trimmedName.length() < 2) {
-            throw new IllegalArgumentException("Role name must be at least 2 characters long");
-        }
-        
-        if (trimmedName.length() > 50) {
-            throw new IllegalArgumentException("Role name cannot exceed 50 characters");
-        }
-        
-        if (!trimmedName.matches("^[a-zA-Z0-9_\\s-]+$")) {
-            throw new IllegalArgumentException("Role name can only contain letters, numbers, spaces, hyphens and underscores");
-        }
-    }
-    
-    /**
-     * Validates role name according to additional business rules.
-     * 
-     * @param name the role name to validate
-     * @throws IllegalArgumentException if the name violates business rules
-     */
-    private void validateRoleNameBusinessRules(String name) {
-        // Check for reserved role names
-        List<String> reservedNames = List.of("SYSTEM", "ROOT", "NULL", "UNDEFINED");
-        
-        if (reservedNames.contains(name.toUpperCase())) {
-            throw new IllegalArgumentException("Role name '" + name + "' is reserved and cannot be used");
-        }
-        
-        // Check for inappropriate prefixes
-        if (name.toUpperCase().startsWith("SYS_") || name.toUpperCase().startsWith("INTERNAL_")) {
-            throw new IllegalArgumentException("Role name cannot start with system prefixes (SYS_, INTERNAL_)");
-        }
-        
-        // Additional business rules can be added here
-    }
-    
-    /**
-     * Validates that a role can be deleted according to business rules.
-     * 
-     * @param role the role to validate for deletion
-     * @throws IllegalArgumentException if the role cannot be deleted
-     */
-    public void validateRoleDeletion(Role role) {
-        if (role == null) {
-            throw new IllegalArgumentException("Role cannot be null");
-        }
-        
+    @Override
+    public void deleteRole(Long id) {
+        Role role = roleRepositoryPort.findById(id)
+                .orElseThrow(() -> new RoleNotFoundException("Role with ID " + id + " not found"));
+
         // Business rule: Cannot delete system roles
-        if (role.getName() != null && role.getName().toUpperCase().contains("SYSTEM")) {
-            throw new IllegalArgumentException("System roles cannot be deleted");
+        if (role.isSystemRole()) {
+            throw new SystemRoleException("Cannot delete system role: " + role.getName());
         }
-        
-        // Additional deletion validation rules can be added here
-    }
-    
-    /**
-     * Checks if a role name is valid according to business rules.
-     * 
-     * @param name the role name to check
-     * @return true if the name is valid, false otherwise
-     */
-    public boolean isValidRoleName(String name) {
-        try {
-            validateRoleName(name);
-            validateRoleNameBusinessRules(name);
-            return true;
-        } catch (IllegalArgumentException e) {
-            return false;
+
+        boolean deleted = roleRepositoryPort.deleteById(id);
+        if (!deleted) {
+            throw new RoleNotFoundException("Role with ID " + id + " could not be deleted");
         }
+
+        // Notify external systems asynchronously using Virtual Threads (Java 21)
+        Thread.startVirtualThread(() -> {
+            try {
+                notificationPort.notifyRoleDeleted(id);
+            } catch (Exception e) {
+                System.err.println("Failed to send notification: " + e.getMessage());
+            }
+        });
     }
-    
+
+    // ========== QUERIES (Read Operations) ==========
+
     /**
-     * Normalizes a role name according to business rules.
-     * 
-     * @param name the role name to normalize
-     * @return the normalized role name
+     * Retrieves a role by its ID.
      */
-    public String normalizeRoleName(String name) {
-        if (name == null) {
-            return null;
+    @Override
+    public Optional<Role> getRoleById(Long id) {
+        return roleRepositoryPort.findById(id);
+    }
+
+    /**
+     * Retrieves a role by its name.
+     */
+    @Override
+    public Optional<Role> getRoleByName(String name) {
+        return roleRepositoryPort.findByName(name.trim().toUpperCase());
+    }
+
+    /**
+     * Retrieves all roles in the system.
+     */
+    @Override
+    public List<Role> getAllRoles() {
+        return roleRepositoryPort.findAll();
+    }
+
+    /**
+     * Searches roles by name pattern.
+     */
+    @Override
+    public List<Role> searchRolesByName(String pattern) {
+        if (pattern == null || pattern.trim().isEmpty()) {
+            throw new IllegalArgumentException("Search pattern cannot be blank");
         }
-        
-        // Trim whitespace and convert to proper case
-        String normalized = name.trim();
-        
-        // Replace multiple spaces with single space
-        normalized = normalized.replaceAll("\\s+", " ");
-        
-        return normalized;
+        return roleRepositoryPort.findByNameContaining(pattern.trim());
     }
-    
+
     /**
-     * Checks if a role is considered active.
-     * A role is active if it has been created and has a valid name.
-     * 
-     * @param role the role to check
-     * @return true if the role is active, false otherwise
+     * Gets the total count of roles.
      */
-    public boolean isRoleActive(Role role) {
-        return role != null && 
-               role.getName() != null && 
-               !role.getName().trim().isEmpty() && 
-               role.getCreatedAt() != null;
+    @Override
+    public Long getRoleCount() {
+        return roleRepositoryPort.count();
+    }
+
+    /**
+     * Checks if a role exists by name.
+     */
+    @Override
+    public boolean roleExists(String name) {
+        return roleRepositoryPort.existsByName(name.trim().toUpperCase());
     }
 }

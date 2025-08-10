@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * implemented in the Role domain model.
  * 
  * @author OnMind (Cesar Andres Arcila Buitrago)
- * @version 1.0.0
+ * @version 2.0.0
  */
 @DisplayName("Role Domain Model Tests")
 class RoleTest {
@@ -28,14 +28,14 @@ class RoleTest {
         @DisplayName("Should create role with name constructor")
         void shouldCreateRoleWithNameConstructor() {
             // Given
-            String roleName = "ADMIN";
+            String roleName = "admin";
             
             // When
             Role role = new Role(roleName);
             
             // Then
             assertNotNull(role);
-            assertEquals(roleName, role.getName());
+            assertEquals("ADMIN", role.getName()); // Should be normalized to uppercase
             assertNotNull(role.getCreatedAt());
             assertNull(role.getId());
         }
@@ -45,7 +45,7 @@ class RoleTest {
         void shouldCreateRoleWithFullConstructor() {
             // Given
             Long id = 1L;
-            String name = "USER";
+            String name = "user";
             LocalDateTime createdAt = LocalDateTime.now().minusDays(1);
             
             // When
@@ -54,7 +54,7 @@ class RoleTest {
             // Then
             assertNotNull(role);
             assertEquals(id, role.getId());
-            assertEquals(name, role.getName());
+            assertEquals("USER", role.getName()); // Should be normalized to uppercase
             assertEquals(createdAt, role.getCreatedAt());
         }
         
@@ -88,27 +88,50 @@ class RoleTest {
         }
         
         @Test
-        @DisplayName("Should create role with null name")
-        void shouldCreateRoleWithNullName() {
+        @DisplayName("Should throw exception for null name")
+        void shouldThrowExceptionForNullName() {
             // When & Then
-            assertDoesNotThrow(() -> new Role(null));
+            IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class, 
+                () -> new Role(null)
+            );
+            assertEquals("Role name cannot be blank", exception.getMessage());
         }
         
         @Test
-        @DisplayName("Should create role with empty name")
-        void shouldCreateRoleWithEmptyName() {
+        @DisplayName("Should throw exception for empty name")
+        void shouldThrowExceptionForEmptyName() {
             // When & Then
-            assertDoesNotThrow(() -> new Role(""));
+            IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class, 
+                () -> new Role("")
+            );
+            assertEquals("Role name cannot be blank", exception.getMessage());
         }
         
         @Test
-        @DisplayName("Should create role with any characters")
-        void shouldCreateRoleWithAnyCharacters() {
+        @DisplayName("Should throw exception for blank name")
+        void shouldThrowExceptionForBlankName() {
             // When & Then
-            assertDoesNotThrow(() -> new Role("ADMIN@ROLE"));
-            assertDoesNotThrow(() -> new Role("ROLE$"));
-            assertDoesNotThrow(() -> new Role("ROLE%"));
-            assertDoesNotThrow(() -> new Role("ROLE!"));
+            IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class, 
+                () -> new Role("   ")
+            );
+            assertEquals("Role name cannot be blank", exception.getMessage());
+        }
+        
+        @Test
+        @DisplayName("Should throw exception for name too long")
+        void shouldThrowExceptionForNameTooLong() {
+            // Given
+            String longName = "A".repeat(101);
+            
+            // When & Then
+            IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class, 
+                () -> new Role(longName)
+            );
+            assertEquals("Role name cannot exceed 100 characters", exception.getMessage());
         }
     }
     
@@ -117,29 +140,64 @@ class RoleTest {
     class BusinessLogicTests {
         
         @Test
-        @DisplayName("Should allow setting name directly")
-        void shouldAllowSettingNameDirectly() {
-            // Given
-            Role role = new Role("OLD_NAME");
-            String newName = "NEW_NAME";
-            
-            // When
-            role.setName(newName);
-            
-            // Then
-            assertEquals(newName, role.getName());
+        @DisplayName("Should identify system roles correctly")
+        void shouldIdentifySystemRolesCorrectly() {
+            // Given & When & Then
+            assertTrue(new Role("ADMIN").isSystemRole());
+            assertTrue(new Role("ROOT").isSystemRole());
+            assertTrue(new Role("SYSTEM").isSystemRole());
+            assertTrue(new Role("SYSTEM_ADMIN").isSystemRole());
+            assertFalse(new Role("USER").isSystemRole());
+            assertFalse(new Role("MANAGER").isSystemRole());
         }
         
         @Test
-        @DisplayName("Should allow setting any name value")
-        void shouldAllowSettingAnyNameValue() {
+        @DisplayName("Should create role with factory method")
+        void shouldCreateRoleWithFactoryMethod() {
             // Given
-            Role role = new Role("VALID_NAME");
+            String roleName = "developer";
             
-            // When & Then
-            assertDoesNotThrow(() -> role.setName(""));
-            assertDoesNotThrow(() -> role.setName(null));
-            assertDoesNotThrow(() -> role.setName("INVALID@NAME"));
+            // When
+            Role role = Role.create(roleName);
+            
+            // Then
+            assertNotNull(role);
+            assertEquals("DEVELOPER", role.getName());
+            assertNotNull(role.getCreatedAt());
+            assertNull(role.getId());
+        }
+        
+        @Test
+        @DisplayName("Should create new role with updated name")
+        void shouldCreateNewRoleWithUpdatedName() {
+            // Given
+            Role originalRole = new Role(1L, "OLD_NAME", LocalDateTime.now());
+            String newName = "new_name";
+            
+            // When
+            Role updatedRole = originalRole.withName(newName);
+            
+            // Then
+            assertNotNull(updatedRole);
+            assertEquals(originalRole.getId(), updatedRole.getId());
+            assertEquals("NEW_NAME", updatedRole.getName());
+            assertEquals(originalRole.getCreatedAt(), updatedRole.getCreatedAt());
+            // Original role should remain unchanged
+            assertEquals("OLD_NAME", originalRole.getName());
+        }
+        
+        @Test
+        @DisplayName("Should normalize name to uppercase")
+        void shouldNormalizeNameToUppercase() {
+            // Given & When
+            Role role1 = new Role("admin");
+            Role role2 = new Role("  User  ");
+            Role role3 = Role.create("manager");
+            
+            // Then
+            assertEquals("ADMIN", role1.getName());
+            assertEquals("USER", role2.getName());
+            assertEquals("MANAGER", role3.getName());
         }
     }
     

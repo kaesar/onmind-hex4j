@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -285,10 +286,14 @@ class RoleRepositoryAdapterTest {
         // Given
         Long roleId = 1L;
         
+        when(jpaRepository.existsById(roleId)).thenReturn(true);
+        
         // When
-        repositoryAdapter.deleteById(roleId);
+        boolean result = repositoryAdapter.deleteById(roleId);
         
         // Then
+        assertTrue(result);
+        verify(jpaRepository).existsById(roleId);
         verify(jpaRepository).deleteById(roleId);
     }
     

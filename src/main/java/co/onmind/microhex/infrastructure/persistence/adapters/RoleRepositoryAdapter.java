@@ -1,7 +1,7 @@
 package co.onmind.microhex.infrastructure.persistence.adapters;
 
-import co.onmind.microhex.application.ports.out.RoleRepositoryPort;
 import co.onmind.microhex.domain.models.Role;
+import co.onmind.microhex.domain.ports.out.RoleRepositoryPort;
 import co.onmind.microhex.infrastructure.persistence.entities.RoleEntity;
 import co.onmind.microhex.infrastructure.persistence.mappers.RoleEntityMapper;
 import co.onmind.microhex.infrastructure.persistence.repositories.JpaRoleRepository;
@@ -120,12 +120,30 @@ public class RoleRepositoryAdapter implements RoleRepositoryPort {
      * {@inheritDoc}
      */
     @Override
-    public void deleteById(Long id) {
+    @Transactional(readOnly = true)
+    public List<Role> findByNameContaining(String pattern) {
+        if (pattern == null || pattern.trim().isEmpty()) {
+            throw new IllegalArgumentException("Pattern cannot be null or blank");
+        }
+        
+        List<RoleEntity> entities = jpaRepository.findByNameContainingIgnoreCase(pattern.trim());
+        return entityMapper.toDomainList(entities);
+    }
+    
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public boolean deleteById(Long id) {
         if (id == null) {
             throw new IllegalArgumentException("ID cannot be null");
         }
         
-        jpaRepository.deleteById(id);
+        if (jpaRepository.existsById(id)) {
+            jpaRepository.deleteById(id);
+            return true;
+        }
+        return false;
     }
     
     /**
@@ -133,7 +151,7 @@ public class RoleRepositoryAdapter implements RoleRepositoryPort {
      */
     @Override
     @Transactional(readOnly = true)
-    public long count() {
+    public Long count() {
         return jpaRepository.count();
     }
     

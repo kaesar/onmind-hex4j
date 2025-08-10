@@ -1,40 +1,50 @@
 package co.onmind.microhex.application.mappers;
 
-import co.onmind.microhex.application.dto.in.CreateRoleRequestDto;
-import co.onmind.microhex.application.dto.out.RoleResponseDto;
+import co.onmind.microhex.application.dto.CreateRoleRequest;
+import co.onmind.microhex.application.dto.RoleResponse;
 import co.onmind.microhex.domain.models.Role;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
+import org.mapstruct.factory.Mappers;
+
+import java.util.List;
 
 /**
- * MapStruct mapper for converting between Role domain model and DTOs.
+ * MapStruct mapper for converting between Role domain models and DTOs.
  * 
- * This interface defines the mapping rules between the domain model and
- * the application layer DTOs. MapStruct will generate the implementation
- * at compile time, providing type-safe and performant mapping.
+ * This mapper uses MapStruct to automatically generate the implementation
+ * at compile time, providing better performance and type safety.
  * 
  * @author OnMind (Cesar Andres Arcila Buitrago)
- * @version 1.0.0
+ * @version 2.0.0
  */
 @Mapper(componentModel = "spring")
 public interface RoleMapper {
     
-    /**
-     * Converts a Role domain model to a RoleResponseDto.
-     * 
-     * @param role The domain model to convert
-     * @return The corresponding response DTO
-     */
-    RoleResponseDto toResponseDto(Role role);
+    RoleMapper INSTANCE = Mappers.getMapper(RoleMapper.class);
     
     /**
-     * Converts a CreateRoleRequestDto to a Role domain model.
-     * The id and createdAt fields will be null and should be set by the domain service.
-     * 
-     * @param createRoleRequestDto The request DTO to convert
-     * @return The corresponding domain model
+     * Converts a Role domain model to RoleResponse DTO.
+     * @param role the domain model
+     * @return the response DTO
+     */
+    RoleResponse toResponse(Role role);
+    
+    /**
+     * Converts a list of Role domain models to a list of RoleResponse DTOs.
+     * @param roles the list of domain models
+     * @return the list of response DTOs
+     */
+    List<RoleResponse> toResponseList(List<Role> roles);
+    
+    /**
+     * Converts a CreateRoleRequest DTO to Role domain model.
+     * Maps only the name field, ignoring id and createdAt.
+     * @param request the create request DTO
+     * @return the domain model
      */
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "createdAt", ignore = true)
-    Role toDomainModel(CreateRoleRequestDto createRoleRequestDto);
+    @Mapping(target = "withName", ignore = true)
+    Role toDomain(CreateRoleRequest request);
 }
