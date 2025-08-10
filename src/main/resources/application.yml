@@ -1,23 +1,39 @@
-micronaut:
+spring:
   application:
-    name: hex
-  server:
-    port: 8080
-
-datasources:
-  default:
+    name: hex4j
+  datasource:
     url: jdbc:h2:mem:devDb;LOCK_TIMEOUT=10000;DB_CLOSE_ON_EXIT=FALSE
-    driverClassName: org.h2.Driver
+    driver-class-name: org.h2.Driver
     username: sa
     password: ''
-    dialect: H2
-    schema-generate: CREATE_DROP
-    schema-generate-names:
-      - roles
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+        format_sql: true
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
 
-logger:
-  levels:
-    co.onmind.hex: DEBUG
-    io.micronaut.data: DEBUG
-    io.micronaut.web: DEBUG
-    io.micronaut.http: DEBUG
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    co.onmind.microhex: DEBUG
+    org.springframework.web: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
