@@ -1,14 +1,18 @@
 plugins {
     id 'java'
-    id 'org.springframework.boot' version '3.5.4'
+    id 'org.springframework.boot' version '3.5.14'
     id 'io.spring.dependency-management' version '1.1.7'
+    id 'jacoco'
 }
 
 group = 'co.onmind'
-version = '0.2.0-SNAPSHOT'
+version = '0.3.0-SNAPSHOT'
 
 java {
     sourceCompatibility = '21'
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
 }
 
 configurations {
@@ -19,39 +23,103 @@ configurations {
 
 repositories {
     mavenCentral()
+    maven { url 'https://repo1.maven.org/maven2' }
 }
 
+def xdbJar = file('../api/xdb/build/libs/onmind-xdb-1.0.0-early2026.jar')
+
 dependencies {
-    // Spring Boot dependencies with Undertow
+    // Spring Boot MVC (blocking) with Undertow
     implementation('org.springframework.boot:spring-boot-starter-web') {
         exclude group: 'org.springframework.boot', module: 'spring-boot-starter-tomcat'
     }
     implementation 'org.springframework.boot:spring-boot-starter-undertow'
+    // WebClient (blocking usage via .block()) for XDB / external HTTP — server stays Undertow MVC
+    implementation 'org.springframework.boot:spring-boot-starter-webflux'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.boot:spring-boot-starter-aop'
-    
+
     // Database
     runtimeOnly 'com.h2database:h2'
     testRuntimeOnly 'com.h2database:h2'
-    
+
     // MapStruct for object mapping
     implementation 'org.mapstruct:mapstruct:1.5.5.Final'
     annotationProcessor 'org.mapstruct:mapstruct-processor:1.5.5.Final'
-    
+
+    // AWS SDK v2 (blocking sync clients) for S3 / SQS / SNS / EventBridge / Lambda
+    implementation platform('software.amazon.awssdk:bom:2.25.27')
+    implementation 'software.amazon.awssdk:s3'
+    implementation 'software.amazon.awssdk:sqs'
+    implementation 'software.amazon.awssdk:sns'
+    implementation 'software.amazon.awssdk:eventbridge'
+    implementation 'software.amazon.awssdk:lambda'
+    implementation 'software.amazon.awssdk:apache-client'
+
+    // QuickJS (JNI) for sandboxed JavaScript execution — replaces GraalJS from hex4w
+    implementation 'io.github.stefanrichterhuber:quickjs-java:2.0.2'
+
+    // Kafka (optional — activate with profile 'kafka')
+    implementation 'org.springframework.kafka:spring-kafka'
+
+    // RabbitMQ (optional — activate with profile 'rabbitmq')
+    implementation 'org.springframework.boot:spring-boot-starter-amqp'
+
+    // gRPC client for XDB (optional — activate with profile 'grpc').
+    // Compiled only when the xdb proto JAR exists (see sourceSets below).
+    implementation 'io.grpc:grpc-netty-shaded:1.69.1'
+    implementation 'io.grpc:grpc-protobuf:1.69.1'
+    implementation 'io.grpc:grpc-stub:1.69.1'
+    implementation 'com.google.protobuf:protobuf-java:3.25.5'
+    if (xdbJar.exists()) {
+        // xdb JAR provides gRPC proto-generated classes (AbcServiceGrpc, AbcRequest, AbcResponse)
+        implementation files(xdbJar)
+    }
+
+    // Redis (blocking) for caching layer
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+
+    // Spring Mail — blocking email via JavaMail
+    implementation 'org.springframework.boot:spring-boot-starter-mail'
+
+    // Spring for GraphQL (BFF endpoint exposing /abc as GraphQL)
+    implementation 'org.springframework.boot:spring-boot-starter-graphql'
+
+    // Resilience4j — Circuit Breaker for blocking adapters
+    implementation 'io.github.resilience4j:resilience4j-circuitbreaker:2.2.0'
+
     // Lombok (optional, for reducing boilerplate)
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
-    
-    // Testing dependencies
+
+    // Testing dependencies (blocking MVC: MockMvc, no reactor-test)
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.mockito:mockito-core'
     testImplementation 'org.mockito:mockito-junit-jupiter'
     testImplementation 'org.assertj:assertj-core'
 }
 
-
+sourceSets {
+    main {
+        java {
+            if (!xdbJar.exists()) {
+                // gRPC proto classes unavailable — skip gRPC sources so the
+                // default build stays green. Enable by providing the xdb JAR.
+                exclude 'co/onmind/hex/infrastructure/webclients/GrpcAbcAdapter.java'
+                exclude 'co/onmind/hex/infrastructure/configuration/GrpcConfiguration.java'
+            }
+        }
+    }
+    test {
+        java {
+            if (!xdbJar.exists()) {
+                exclude 'co/onmind/hex/infrastructure/webclients/GrpcAbcAdapterTest.java'
+            }
+        }
+    }
+}
 
 tasks.named('test') {
     useJUnitPlatform()
@@ -62,3 +130,13 @@ tasks.named('test') {
 
 // Ensure proper compilation order
 compileJava.dependsOn processResources
+
+// JaCoCo — code coverage report (no verification gate in Fase 1)
+jacocoTestReport {
+    dependsOn test
+    reports {
+        xml.required = true
+        html.required = true
+        csv.required = false
+    }
+}

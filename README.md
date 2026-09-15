@@ -1,6 +1,6 @@
 # Hex4j - Hexagonal Architecture with Java and Spring Boot
 
-This project implements a hexagonal architecture approach using Java 21, Spring Boot Framework and Gradle, with a variation where ports are located in the domain layer.
+This project implements a hexagonal architecture approach using Java 21, Spring Boot Framework and Gradle, with ports and use cases located in the application layer.
 
 ## Architecture
 
@@ -8,37 +8,41 @@ This project implements a hexagonal architecture approach using Java 21, Spring 
 
 This implementation presents a variation of traditional hexagonal architecture:
 
-- **Domain**: Contains ports (interfaces) and domain service with command and query operations, plus the model
-- **Application**: Acts as orchestrator with application handlers and mappers, injecting the service through the input port to access the domain service
+- **Domain**: Contains the model, the domain service with business rules, and domain exceptions
+- **Application**: Acts as orchestrator with use cases and mappers, defining input/output ports to access the domain service and infrastructure adapters
 - **Infrastructure**: Implements adapters that connect with external systems
 
 ### Project Structure
 
 ```
-src/main/java/co/onmind/microhex/
+src/main/java/co/onmind/hex/
 ├── domain/
-│   ├── models/          # Domain models (Role)
-│   ├── ports/           # Ports/Interfaces (RoleServicePort, RoleRepositoryPort, NotificationPort)
-│   │   ├── in/          # Input ports (RoleServicePort)
-│   │   └── out/         # Output ports (RoleRepositoryPort, NotificationPort)
+│   ├── models/          # Domain models (Role, ScriptResult, ScriptWhitelist, StoreItem)
 │   ├── services/        # Domain services (RoleService)
 │   └── exceptions/      # Domain exceptions
 ├── application/
-│   ├── dto/             # DTOs for requests/responses
+│   ├── dto/             # DTOs for requests/responses (in/, out/)
 │   ├── mappers/         # Mappers between domain and DTOs
-│   └── handlers/        # Handlers or application use cases (RoleHandler)
+│   ├── ports/           # Ports/Interfaces (RoleRepositoryPort, ScriptingPort, AbcPort, ...)
+│   │   ├── in/          # Input ports (CreateRoleTrait, GetRoleTrait, ExecuteScriptTrait, ...)
+│   │   └── out/         # Output ports (RoleRepositoryPort, ScriptingPort, StorePort, ...)
+│   └── usecases/        # Application use cases (RoleUseCase, ScriptingUseCase, ...)
 ├── infrastructure/
 │   ├── controllers/     # REST controllers or end-points (RoleController)
 │   ├── persistence/     # Database persistence adapters
 │   ├── notification/    # Notification adapters
+│   ├── scripts/         # Scripting adapters (QuickJS)
+│   ├── storage/         # Object storage adapters (S3)
+│   ├── events/          # Event adapters (Kafka, RabbitMQ, SQS, SNS, EventBridge)
+│   ├── webclients/      # Web clients for external services (XDB)
 │   └── configuration/   # Spring configurations
 └── transverse/          # Cross-cutting concerns
 ```
 
 ## Technologies
 
-- **Java 21**: Modern programming language with Virtual Threads support
-- **Spring Boot 3.5.4**: Reactive and lightweight web framework
+- **Java 21**: Modern programming language
+- **Spring Boot 3.5.14**: Reactive and lightweight web framework
 - **Gradle**: Dependency manager and build tool
 - **H2 Database**: In-memory database for development
 - **JUnit 5**: Modern testing framework
@@ -46,18 +50,18 @@ src/main/java/co/onmind/microhex/
 
 ## Features
 
-- ✅ **Hexagonal architecture** with ports in domain
+- ✅ **Hexagonal architecture** with ports in application
 - ✅ **Clear separation of responsibilities** by layers
 - ✅ **Dependency injection** with Spring Boot
 - ✅ **Data validation** with Bean Validation
 - ✅ **Enhanced HTTP error handling**
 - ✅ **H2 database** with automatic initialization
 - ✅ **Structured logging** for monitoring
-- ✅ **Virtual Threads** for async notifications (Java 21)
+- ✅ **Sandboxed scripting** with QuickJS (Java 21)
 
 ## Features
 
-- ✅ **Hexagonal architecture** with ports in domain
+- ✅ **Hexagonal architecture** with ports in application
 - ✅ **Clear separation of responsibilities** by layers
 - ✅ **Dependency injection** with Micronaut
 - ✅ **Data validation** with Bean Validation
@@ -93,7 +97,7 @@ The application will start on `http://localhost:8080`
 When the application is running, you can access the H2 database console at:
 `http://localhost:8080/h2-console`
 
-- JDBC URL: `jdbc:h2:mem:microhex`
+- JDBC URL: `jdbc:h2:mem:hex4j`
 - Username: `sa`
 - Password: `password`
 
@@ -117,6 +121,15 @@ The template includes a complete Role management example demonstrating:
 - `DELETE /api/v1/roles/{id}` - Delete role
 - `GET /api/v1/roles/search?name={pattern}` - Search roles by pattern
 - `GET /api/v1/roles/count` - Count roles
+
+### Scripts
+- `POST /api/v1/script/execute` - Execute whitelisted script
+
+### XDB
+- `GET /api/v1/xdb/sheet` - Get XDB sheet
+
+### Store
+- `GET /api/v1/store/items?bucket={name}` - List store items
 
 ## Usage Examples
 
@@ -155,11 +168,11 @@ curl "http://localhost:8080/api/v1/roles/search?name=ADMIN"
 
 1. Create domain model in `domain/models/`
 2. Create domain exceptions in `domain/exceptions/`
-3. Define input/output ports in `domain/ports/`
+3. Define input/output ports in `application/ports/`
 4. Create domain service in `domain/services/`
 5. Define DTOs in `application/dto/`
 6. Create mapper in `application/mappers/`
-7. Implement handler in `application/handlers/`
+7. Implement use case in `application/usecases/`
 8. Create JPA entity in `infrastructure/persistence/entities/`
 9. Implement repository adapter in `infrastructure/persistence/adapters/`
 10. Create REST controller in `infrastructure/controllers/`

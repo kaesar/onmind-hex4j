@@ -1,8 +1,12 @@
 spring:
   application:
     name: hex4j
+
+  profiles:
+    active: dev
+
   datasource:
-    url: jdbc:h2:mem:devDb;LOCK_TIMEOUT=10000;DB_CLOSE_ON_EXIT=FALSE
+    url: jdbc:h2:mem:hex4j;LOCK_TIMEOUT=10000;DB_CLOSE_ON_EXIT=FALSE
     driver-class-name: org.h2.Driver
     username: sa
     password: ''
@@ -10,34 +14,164 @@ spring:
     hibernate:
       ddl-auto: create-drop
     show-sql: true
+    defer-datasource-initialization: true
     properties:
       hibernate:
         dialect: org.hibernate.dialect.H2Dialect
         format_sql: true
+  sql:
+    init:
+      mode: always
+      data-locations: classpath:data.sql
   h2:
     console:
       enabled: true
       path: /h2-console
 
+  # Kafka disabled by default. Enable with: --spring.profiles.active=dev,kafka
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
+
+  # Redis (Lettuce, blocking) — used by the XDB cache adapter
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 2000ms
+
+  # Mail (SMTP) — used by SmtpEmailAdapter; Mailpit on port 1025 for tests
+  mail:
+    host: localhost
+    port: 1025
+    username: ""
+    password: ""
+    properties:
+      mail:
+        smtp:
+          auth: false
+          starttls:
+            enable: false
+
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    time-zone: UTC
+
 server:
   port: 8080
 
-notification:
-  service:
-    url: http://localhost:8081
+# Application-specific configuration (parity with hex4w)
+app:
+  webclient:
+    connect-timeout: 5000
+    read-timeout: 10000
+    write-timeout: 10000
+    max-memory-size: 1048576
+  notification:
+    email:
+      from: hex4j@localhost
+      host: localhost
+      port: 1025
+      endpoint-enabled: false
+  graphql:
+    enabled: false
+  aws:
+    region: us-east-1
+    endpoint: http://localhost:4566
+  s3:
+    region: us-east-1
+    endpoint: http://localhost:4566
+    force-path-style: true
+  lambda:
+    region: us-east-1
+    endpoint: http://localhost:4566
+  rabbitmq:
+    host: localhost
+    port: 5672
+    exchange:
+      default: hex4j.script.commands
+      results: hex4j.script.results
+    queue:
+      script-commands: hex4j.script.commands
+  scripts:
+    location: classpath:scripts/
+    whitelist: hello.js,example.js,services.js
+  xdb:
+    base-url: http://localhost:9990
+    grpc:
+      host: localhost
+      port: 9991
+    auth-type: basic
+    auth-token: admin:admin
+    cache:
+      enabled: true
+      ttl-seconds: 300
 
 management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,metrics
   endpoint:
     health:
-      show-details: always
+      show-details: when_authorized
 
 logging:
   level:
-    co.onmind.microhex: DEBUG
-    org.springframework.web: DEBUG
+    root: INFO
+    co.onmind.hex: DEBUG
+    org.springframework.web: INFO
     org.hibernate.SQL: DEBUG
     org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+---
+spring:
+  config:
+    activate:
+      on-profile: dev
+
+  rabbitmq:
+    host: localhost
+    port: 5672
+
+logging:
+  level:
+    co.onmind.hex: DEBUG
+
+---
+spring:
+  config:
+    activate:
+      on-profile: test
+
+  datasource:
+    url: jdbc:h2:mem:testdb;LOCK_TIMEOUT=10000;DB_CLOSE_ON_EXIT=FALSE
+
+  sql:
+    init:
+      mode: never
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+logging:
+  level:
+    root: WARN
+    co.onmind.hex: INFO
+
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+logging:
+  level:
+    root: WARN
+    co.onmind.hex: INFO

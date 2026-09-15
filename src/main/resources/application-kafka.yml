@@ -1,0 +1,27 @@
+spring:
+  config:
+    activate:
+      on-profile: kafka
+  autoconfigure:
+    exclude: []
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      bootstrap-servers: localhost:9092
+      group-id: hex4j-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      properties:
+        spring.json.trusted.packages: "*"
+    producer:
+      bootstrap-servers: localhost:9092
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+app:
+  kafka:
+    bootstrap-servers: localhost:9092
+    topic:
+      script-commands: hex4j.script.commands
+      script-results: hex4j.script.results

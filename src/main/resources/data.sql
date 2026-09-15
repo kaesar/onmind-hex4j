@@ -1,0 +1,3 @@
+INSERT INTO roles (name, created_at) VALUES ('ADMIN', CURRENT_TIMESTAMP);
+INSERT INTO roles (name, created_at) VALUES ('USER', CURRENT_TIMESTAMP);
+INSERT INTO roles (name, created_at) VALUES ('MODERATOR', CURRENT_TIMESTAMP);
