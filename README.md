@@ -15,7 +15,8 @@ This implementation presents a variation of traditional hexagonal architecture:
 ### Project Structure
 
 ```
-src/main/java/co/onmind/hex/
+  __________________
+./ co.onmind.hex /
 ├── domain/
 │   ├── models/          # Domain models (Role, ScriptResult, ScriptWhitelist, StoreItem)
 │   ├── services/        # Domain services (RoleService)
@@ -50,25 +51,25 @@ src/main/java/co/onmind/hex/
 
 ## Features
 
-- ✅ **Hexagonal architecture** with ports in application
-- ✅ **Clear separation of responsibilities** by layers
-- ✅ **Dependency injection** with Spring Boot
-- ✅ **Data validation** with Bean Validation
-- ✅ **Enhanced HTTP error handling**
-- ✅ **H2 database** with automatic initialization
-- ✅ **Structured logging** for monitoring
-- ✅ **Sandboxed scripting** with QuickJS (Java 21)
+- **Hexagonal architecture** with ports in application
+- **Clear separation of responsibilities** by layers
+- **Dependency injection** with Spring Boot
+- **Data validation** with Bean Validation
+- **Enhanced HTTP error handling**
+- **H2 database** with automatic initialization
+- **Structured logging** for monitoring
+- **Sandboxed scripting** with QuickJS (Java 21)
 
 ## Features
 
-- ✅ **Hexagonal architecture** with ports in application
-- ✅ **Clear separation of responsibilities** by layers
-- ✅ **Dependency injection** with Micronaut
-- ✅ **Data validation** with Bean Validation
-- ✅ **Enhanced HTTP error handling**
-- ✅ **Unit and integration tests** (75%+ coverage)
-- ✅ **H2 database** with automatic initialization
-- ✅ **Structured logging** for monitoring
+- **Hexagonal architecture** with ports in application
+- **Clear separation of responsibilities** by layers
+- **Dependency injection** with Micronaut
+- **Data validation** with Bean Validation
+- **Enhanced HTTP error handling**
+- **Unit and integration tests** (75%+ coverage)
+- **H2 database** with automatic initialization
+- **Structured logging** for monitoring
 
 ## Endpoints API
 

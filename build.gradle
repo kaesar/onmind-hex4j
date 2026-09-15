@@ -58,8 +58,9 @@ dependencies {
     implementation 'software.amazon.awssdk:lambda'
     implementation 'software.amazon.awssdk:apache-client'
 
-    // QuickJS (JNI) for sandboxed JavaScript execution — replaces GraalJS from hex4w
-    implementation 'io.github.stefanrichterhuber:quickjs-java:2.0.2'
+    // QuickJS (pure Java) for sandboxed JavaScript execution — replaces GraalJS from hex4w.
+    // Works on any platform (macOS, Linux, Windows), zero native dependencies.
+    implementation 'com.caoccao.qjs4j:qjs4j:0.1.1'
 
     // Kafka (optional — activate with profile 'kafka')
     implementation 'org.springframework.kafka:spring-kafka'

@@ -8,8 +8,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class QuickJsAdapterTest {
 
@@ -21,17 +21,8 @@ class QuickJsAdapterTest {
         adapter = new QuickJsAdapter(services, new ObjectMapper());
     }
 
-    private static boolean nativeAvailable() {
-        try (var runtime = new io.github.stefanrichterhuber.quickjs.QuickJSRuntime();
-             var context = runtime.createContext()) {
-            return "3".equals(String.valueOf(context.eval("1 + 2")));
-        } catch (Throwable t) {
-            return false;
-        }
-    }
-
     @Test
-    @DisplayName("never throws, even when natives are missing")
+    @DisplayName("never throws, even for broken scripts")
     void neverThrows() {
         ScriptResult result = adapter.executeScript("1 + 2");
         assertNotNull(result);
@@ -40,7 +31,6 @@ class QuickJsAdapterTest {
     @Test
     @DisplayName("executes a simple expression and returns its value")
     void executesExpression() {
-        assumeTrue(nativeAvailable(), "QuickJS natives unavailable on this platform");
         ScriptResult result = adapter.executeScript("1 + 2");
         assertEquals("3", result.value());
         assertNull(result.stderr());
@@ -49,7 +39,6 @@ class QuickJsAdapterTest {
     @Test
     @DisplayName("captures console.log into stdout")
     void capturesConsoleLog() {
-        assumeTrue(nativeAvailable(), "QuickJS natives unavailable on this platform");
         ScriptResult result = adapter.executeScript("console.log('hi'); 42;");
         assertEquals("42", result.value());
         assertTrue(result.stdout().contains("hi"));
@@ -58,7 +47,6 @@ class QuickJsAdapterTest {
     @Test
     @DisplayName("captures script errors in stderr instead of failing")
     void capturesErrorsInStderr() {
-        assumeTrue(nativeAvailable(), "QuickJS natives unavailable on this platform");
         ScriptResult result = adapter.executeScript("throw new Error('boom')");
         assertNull(result.value());
         assertNotNull(result.stderr());
@@ -68,7 +56,6 @@ class QuickJsAdapterTest {
     @Test
     @DisplayName("returns object JSON via JSON.stringify")
     void returnsObjectJson() {
-        assumeTrue(nativeAvailable(), "QuickJS natives unavailable on this platform");
         ScriptResult result = adapter.executeScript("JSON.stringify({a: 1})");
         assertEquals("{\"a\":1}", result.value());
     }
@@ -76,9 +63,8 @@ class QuickJsAdapterTest {
     @Test
     @DisplayName("exposes services facade to scripts")
     void exposesServices() {
-        assumeTrue(nativeAvailable(), "QuickJS natives unavailable on this platform");
         ScriptServicesPort services = mock(ScriptServicesPort.class);
-        org.mockito.Mockito.when(services.cacheGet("k")).thenReturn("v");
+        when(services.cacheGet("k")).thenReturn("v");
         QuickJsAdapter adapterWithServices = new QuickJsAdapter(services, new ObjectMapper());
 
         ScriptResult result = adapterWithServices.executeScript("services.cacheGet('k')");

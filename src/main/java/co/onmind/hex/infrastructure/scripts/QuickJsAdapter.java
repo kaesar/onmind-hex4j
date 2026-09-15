@@ -3,24 +3,30 @@ package co.onmind.hex.infrastructure.scripts;
 import co.onmind.hex.application.ports.out.ScriptingPort;
 import co.onmind.hex.application.ports.out.ScriptServicesPort;
 import co.onmind.hex.domain.models.ScriptResult;
+import com.caoccao.qjs4j.core.JSBoolean;
+import com.caoccao.qjs4j.core.JSContext;
+import com.caoccao.qjs4j.core.JSNativeFunction;
+import com.caoccao.qjs4j.core.JSNull;
+import com.caoccao.qjs4j.core.JSNumber;
+import com.caoccao.qjs4j.core.JSObject;
+import com.caoccao.qjs4j.core.JSRuntime;
+import com.caoccao.qjs4j.core.JSRuntimeOptions;
+import com.caoccao.qjs4j.core.JSString;
+import com.caoccao.qjs4j.core.JSUndefined;
+import com.caoccao.qjs4j.core.JSValue;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.stefanrichterhuber.quickjs.QuickJSContext;
-import io.github.stefanrichterhuber.quickjs.QuickJSRuntime;
-import io.github.stefanrichterhuber.quickjs.VariadicFunction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
-import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 
 @Component
 public class QuickJsAdapter implements ScriptingPort {
 
     private static final Logger logger = LoggerFactory.getLogger(QuickJsAdapter.class);
-    private static final long SCRIPT_TIMEOUT_SECONDS = 5;
     private static final long SCRIPT_MEMORY_LIMIT_BYTES = 32L * 1024 * 1024;
 
     private final ScriptServicesPort scriptServices;
@@ -35,95 +41,122 @@ public class QuickJsAdapter implements ScriptingPort {
     @Override
     public ScriptResult executeScript(String script) {
         StringBuilder stdout = new StringBuilder();
-        try (QuickJSRuntime runtime = new QuickJSRuntime();
-             QuickJSContext context = runtime.createContext()) {
+        // NOTE (qjs4j 0.1.1): setMaxMemoryUsage bounds ArrayBuffer/SharedArrayBuffer
+        // allocations, other heap usage is bounded by -Xmx. There is no script
+        // time-limit API in 0.1.1 (interrupt support only exists on unreleased main),
+        // so the script whitelist remains the primary sandbox control.
+        JSRuntimeOptions options = new JSRuntimeOptions()
+            .setMaxMemoryUsage(SCRIPT_MEMORY_LIMIT_BYTES);
+        try (JSRuntime runtime = new JSRuntime(options);
+             JSContext context = runtime.createContext()) {
+            context.getGlobalObject().set("services", buildServicesObject(context));
+            context.getGlobalObject().set("console", buildConsoleObject(context, stdout));
 
-            runtime.withScriptRuntimeLimit(SCRIPT_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-            runtime.withMemoryLimit(SCRIPT_MEMORY_LIMIT_BYTES);
-
-            context.setGlobal("services", buildServicesBinding());
-            context.setGlobal("console", buildConsoleBinding(stdout));
-
-            Object result = context.eval(script);
-            String value = result != null ? result.toString() : null;
+            JSValue result = context.eval(script);
+            Object javaResult = result != null ? result.toJavaObject() : null;
+            String value = formatResult(javaResult);
             return new ScriptResult(value, stdout.toString(), null);
-        } catch (Exception | LinkageError e) {
-            // LinkageError (e.g. UnsatisfiedLinkError) covers platforms without
-            // QuickJS native libraries — degrade to an error result, never throw.
+        } catch (Exception e) {
             String detail = e.getMessage() != null ? e.getMessage() : e.toString();
             logger.warn("Script execution error: {}", detail);
             return new ScriptResult(null, stdout.toString(), detail);
         }
     }
 
-    private Map<String, Object> buildConsoleBinding(StringBuilder stdout) {
-        VariadicFunction<Object> log = args -> {
+    private JSObject buildConsoleObject(JSContext context, StringBuilder stdout) {
+        JSNativeFunction log = new JSNativeFunction(context, "log", 1, (ctx, thisArg, args) -> {
             StringBuilder line = new StringBuilder();
             for (int i = 0; i < args.length; i++) {
                 if (i > 0) line.append(' ');
-                line.append(args[i] != null ? args[i].toString() : "null");
+                Object arg = args[i] != null ? args[i].toJavaObject() : null;
+                line.append(arg != null ? arg.toString() : "null");
             }
             logger.debug("script console.log: {}", line);
             synchronized (stdout) {
                 if (!stdout.isEmpty()) stdout.append('\n');
                 stdout.append(line);
             }
-            return null;
-        };
-        return Map.of("log", log, "info", log, "debug", log, "warn", log, "error", log);
+            return new JSUndefined();
+        });
+        JSObject console = context.createJSObject();
+        console.set("log", log);
+        console.set("info", log);
+        console.set("debug", log);
+        console.set("warn", log);
+        console.set("error", log);
+        return console;
     }
 
-    private Map<String, Object> buildServicesBinding() {
-        Map<String, Object> services = new HashMap<>();
+    private JSObject buildServicesObject(JSContext context) {
+        JSObject services = context.createJSObject();
 
-        services.put("abcSheet", (VariadicFunction<Object>) args ->
-            toJsMap(scriptServices.abcSheet(str(args, 0), str(args, 1), str(args, 2))));
+        services.set("abcSheet", new JSNativeFunction(context, "abcSheet", 3, (ctx, thisArg, args) ->
+            toJsValue(ctx, toJsMap(scriptServices.abcSheet(str(args, 0), str(args, 1), str(args, 2))))));
 
-        services.put("abcExec", (VariadicFunction<Object>) args ->
-            toJsMap(scriptServices.abcExec(str(args, 0), str(args, 1), str(args, 2), str(args, 3), str(args, 4))));
+        services.set("abcExec", new JSNativeFunction(context, "abcExec", 5, (ctx, thisArg, args) ->
+            toJsValue(ctx, toJsMap(scriptServices.abcExec(
+                str(args, 0), str(args, 1), str(args, 2), str(args, 3), str(args, 4))))));
 
-        services.put("publish", (VariadicFunction<Object>) args -> {
+        services.set("publish", new JSNativeFunction(context, "publish", 3, (ctx, thisArg, args) -> {
             scriptServices.publish(str(args, 0), str(args, 1), str(args, 2));
-            return null;
-        });
+            return new JSUndefined();
+        }));
 
-        services.put("invoke", (VariadicFunction<Object>) args ->
-            scriptServices.invoke(str(args, 0), str(args, 1)));
+        services.set("invoke", new JSNativeFunction(context, "invoke", 2, (ctx, thisArg, args) ->
+            toJsValue(ctx, scriptServices.invoke(str(args, 0), str(args, 1)))));
 
-        services.put("invokeAsync", (VariadicFunction<Object>) args -> {
+        services.set("invokeAsync", new JSNativeFunction(context, "invokeAsync", 2, (ctx, thisArg, args) -> {
             scriptServices.invokeAsync(str(args, 0), str(args, 1));
-            return null;
-        });
+            return new JSUndefined();
+        }));
 
-        services.put("listItems", (VariadicFunction<Object>) args ->
-            toJsList(scriptServices.listItems(str(args, 0))));
+        services.set("listItems", new JSNativeFunction(context, "listItems", 1, (ctx, thisArg, args) ->
+            toJsValue(ctx, toJsList(scriptServices.listItems(str(args, 0))))));
 
-        services.put("sendEmail", (VariadicFunction<Object>) args -> {
+        services.set("sendEmail", new JSNativeFunction(context, "sendEmail", 3, (ctx, thisArg, args) -> {
             scriptServices.sendEmail(str(args, 0), str(args, 1), str(args, 2));
-            return null;
-        });
+            return new JSUndefined();
+        }));
 
-        services.put("cacheGet", (VariadicFunction<Object>) args ->
-            scriptServices.cacheGet(str(args, 0)));
+        services.set("cacheGet", new JSNativeFunction(context, "cacheGet", 1, (ctx, thisArg, args) ->
+            toJsValue(ctx, scriptServices.cacheGet(str(args, 0)))));
 
-        services.put("cacheSet", (VariadicFunction<Object>) args -> {
+        services.set("cacheSet", new JSNativeFunction(context, "cacheSet", 2, (ctx, thisArg, args) -> {
             scriptServices.cacheSet(str(args, 0), str(args, 1));
-            return null;
-        });
+            return new JSUndefined();
+        }));
 
-        services.put("cacheEvict", (VariadicFunction<Object>) args -> {
+        services.set("cacheEvict", new JSNativeFunction(context, "cacheEvict", 1, (ctx, thisArg, args) -> {
             scriptServices.cacheEvict(str(args, 0));
-            return null;
-        });
+            return new JSUndefined();
+        }));
 
         return services;
     }
 
-    private String str(Object[] args, int index) {
+    private String str(JSValue[] args, int index) {
         if (args == null || index >= args.length || args[index] == null) {
             return null;
         }
-        return args[index].toString();
+        Object value = args[index].toJavaObject();
+        return formatResult(value);
+    }
+
+    private String formatResult(Object value) {
+        if (value == null) {
+            return null;
+        }
+        // qjs4j materializes every number as Double — render integral values
+        // without the trailing ".0" to keep the ScriptResult contract stable.
+        if (value instanceof Double d && d == Math.rint(d) && !Double.isInfinite(d)
+                && Math.abs(d) < 9.007199254740992E15) {
+            return Long.toString(d.longValue());
+        }
+        if (value instanceof Float f && f == Math.rint(f) && !Float.isInfinite(f)
+                && Math.abs(f) < 9.007199254740992E15f) {
+            return Long.toString(f.longValue());
+        }
+        return value.toString();
     }
 
     @SuppressWarnings("unchecked")
@@ -135,10 +168,43 @@ public class QuickJsAdapter implements ScriptingPort {
     }
 
     @SuppressWarnings("unchecked")
-    private List<Map<String, Object>> toJsList(Object value) {
+    private List<Object> toJsList(Object value) {
         if (value == null) {
             return List.of();
         }
         return objectMapper.convertValue(value, List.class);
+    }
+
+    private JSValue toJsValue(JSContext context, Object value) {
+        if (value == null) {
+            return new JSNull();
+        }
+        if (value instanceof String s) {
+            return new JSString(s);
+        }
+        if (value instanceof Integer i) {
+            return new JSNumber(i);
+        }
+        if (value instanceof Long l) {
+            return new JSNumber(l);
+        }
+        if (value instanceof Number n) {
+            return new JSNumber(n.doubleValue());
+        }
+        if (value instanceof Boolean b) {
+            return new JSBoolean(b);
+        }
+        if (value instanceof Map<?, ?> map) {
+            JSObject object = context.createJSObject();
+            map.forEach((key, entryValue) ->
+                object.set(String.valueOf(key), toJsValue(context, entryValue)));
+            return object;
+        }
+        if (value instanceof Iterable<?> iterable) {
+            List<JSValue> items = new ArrayList<>();
+            iterable.forEach(item -> items.add(toJsValue(context, item)));
+            return context.createJSArray(items.toArray(new JSValue[0]));
+        }
+        return new JSString(value.toString());
     }
 }
