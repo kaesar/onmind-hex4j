@@ -1,6 +1,6 @@
 plugins {
     id 'java'
-    id 'org.springframework.boot' version '3.5.14'
+    id 'org.springframework.boot' version '4.1.1'
     id 'io.spring.dependency-management' version '1.1.7'
     id 'jacoco'
 }
@@ -29,17 +29,13 @@ repositories {
 def xdbJar = file('../api/xdb/build/libs/onmind-xdb-1.0.0-early2026.jar')
 
 dependencies {
-    // Spring Boot MVC (blocking) with Undertow
-    implementation('org.springframework.boot:spring-boot-starter-web') {
-        exclude group: 'org.springframework.boot', module: 'spring-boot-starter-tomcat'
-    }
-    implementation 'org.springframework.boot:spring-boot-starter-undertow'
-    // WebClient (blocking usage via .block()) for XDB / external HTTP — server stays Undertow MVC
-    implementation 'org.springframework.boot:spring-boot-starter-webflux'
+    // Spring Boot MVC with Tomcat (Undertow unsupported in Boot 4)
+    implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+    implementation 'org.springframework.boot:spring-boot-starter-restclient'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
-    implementation 'org.springframework.boot:spring-boot-starter-aop'
+    implementation 'org.springframework.boot:spring-boot-starter-aspectj'
 
     // Database
     runtimeOnly 'com.h2database:h2'
@@ -63,7 +59,7 @@ dependencies {
     implementation 'com.caoccao.qjs4j:qjs4j:0.1.1'
 
     // Kafka (optional — activate with profile 'kafka')
-    implementation 'org.springframework.kafka:spring-kafka'
+    implementation 'org.springframework.boot:spring-boot-starter-kafka'
 
     // RabbitMQ (optional — activate with profile 'rabbitmq')
     implementation 'org.springframework.boot:spring-boot-starter-amqp'
@@ -95,8 +91,9 @@ dependencies {
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
 
-    // Testing dependencies (blocking MVC: MockMvc, no reactor-test)
-    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    // Testing dependencies (blocking MVC, no reactor-test)
+    testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
     testImplementation 'org.mockito:mockito-core'
     testImplementation 'org.mockito:mockito-junit-jupiter'
     testImplementation 'org.assertj:assertj-core'
@@ -132,7 +129,7 @@ tasks.named('test') {
 // Ensure proper compilation order
 compileJava.dependsOn processResources
 
-// JaCoCo — code coverage report (no verification gate in Fase 1)
+// JaCoCo — code coverage report
 jacocoTestReport {
     dependsOn test
     reports {

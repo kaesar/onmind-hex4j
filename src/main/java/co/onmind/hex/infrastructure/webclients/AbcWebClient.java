@@ -3,7 +3,7 @@ package co.onmind.hex.infrastructure.webclients;
 import co.onmind.hex.infrastructure.webclients.dto.AbcRequest;
 import co.onmind.hex.infrastructure.webclients.dto.AbcResponse;
 import co.onmind.hex.infrastructure.webclients.dto.AbcToken;
-import co.onmind.hex.transverse.WebClientGeneric;
+import co.onmind.hex.transverse.RestClientGeneric;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -14,15 +14,15 @@ public class AbcWebClient {
     private static final Logger logger = LoggerFactory.getLogger(AbcWebClient.class);
     private static final String ABC_ENDPOINT = "/abc";
 
-    private final WebClientGeneric webClientGeneric;
+    private final RestClientGeneric restClientGeneric;
     private final AbcToken abcToken;
 
-    public AbcWebClient(WebClientGeneric webClientGeneric) {
-        this(webClientGeneric, AbcToken.none());
+    public AbcWebClient(RestClientGeneric restClientGeneric) {
+        this(restClientGeneric, AbcToken.none());
     }
 
-    public AbcWebClient(WebClientGeneric webClientGeneric, AbcToken abcToken) {
-        this.webClientGeneric = webClientGeneric;
+    public AbcWebClient(RestClientGeneric restClientGeneric, AbcToken abcToken) {
+        this.restClientGeneric = restClientGeneric;
         this.abcToken = abcToken != null ? abcToken : AbcToken.none();
     }
 
@@ -34,7 +34,7 @@ public class AbcWebClient {
             .show(showColumns != null ? showColumns : "kit01 sheetid, kit02 name, kit03 title, kit05 model")
             .build();
         logger.debug("XDB sheet request: show={}", request.show());
-        AbcResponse response = webClientGeneric.post(ABC_ENDPOINT, request, AbcResponse.class, abcToken);
+        AbcResponse response = restClientGeneric.post(ABC_ENDPOINT, request, AbcResponse.class, abcToken);
         logger.debug("XDB sheet response: ok={}, total={}", response.ok(), response.total());
         return response;
     }
@@ -45,7 +45,7 @@ public class AbcWebClient {
             null, request.with(), null, request.where(), request.sort(), request.limit(), request.offset()
         );
         logger.debug("XDB find request: from={}, some={}", findRequest.from(), findRequest.some());
-        AbcResponse response = webClientGeneric.post(ABC_ENDPOINT, findRequest, AbcResponse.class, abcToken);
+        AbcResponse response = restClientGeneric.post(ABC_ENDPOINT, findRequest, AbcResponse.class, abcToken);
         logger.debug("XDB find response: ok={}, total={}", response.ok(), response.total());
         return response;
     }
@@ -56,7 +56,7 @@ public class AbcWebClient {
             null, request.with(), request.puts(), request.where(), request.sort(), request.limit(), request.offset()
         );
         logger.debug("XDB insert request: from={}, some={}, puts={}", insertRequest.from(), insertRequest.some(), insertRequest.puts());
-        AbcResponse response = webClientGeneric.post(ABC_ENDPOINT, insertRequest, AbcResponse.class, abcToken);
+        AbcResponse response = restClientGeneric.post(ABC_ENDPOINT, insertRequest, AbcResponse.class, abcToken);
         logger.debug("XDB insert response: ok={}, status={}", response.ok(), response.status());
         return response;
     }
@@ -67,7 +67,7 @@ public class AbcWebClient {
             null, request.with(), request.puts(), request.where(), request.sort(), request.limit(), request.offset()
         );
         logger.debug("XDB update request: from={}, some={}", updateRequest.from(), updateRequest.some());
-        AbcResponse response = webClientGeneric.post(ABC_ENDPOINT, updateRequest, AbcResponse.class, abcToken);
+        AbcResponse response = restClientGeneric.post(ABC_ENDPOINT, updateRequest, AbcResponse.class, abcToken);
         logger.debug("XDB update response: ok={}, status={}", response.ok(), response.status());
         return response;
     }
@@ -78,7 +78,7 @@ public class AbcWebClient {
             null, request.with(), null, request.where(), request.sort(), request.limit(), request.offset()
         );
         logger.debug("XDB delete request: from={}, some={}", deleteRequest.from(), deleteRequest.some());
-        AbcResponse response = webClientGeneric.post(ABC_ENDPOINT, deleteRequest, AbcResponse.class, abcToken);
+        AbcResponse response = restClientGeneric.post(ABC_ENDPOINT, deleteRequest, AbcResponse.class, abcToken);
         logger.debug("XDB delete response: ok={}, status={}", response.ok(), response.status());
         return response;
     }
@@ -89,7 +89,7 @@ public class AbcWebClient {
             null, request.with(), null, request.where(), request.sort(), request.limit(), request.offset()
         );
         logger.debug("XDB create request: from={}, some={}", createRequest.from(), createRequest.some());
-        AbcResponse response = webClientGeneric.post(ABC_ENDPOINT, createRequest, AbcResponse.class, abcToken);
+        AbcResponse response = restClientGeneric.post(ABC_ENDPOINT, createRequest, AbcResponse.class, abcToken);
         logger.debug("XDB create response: ok={}, status={}", response.ok(), response.status());
         return response;
     }
@@ -100,7 +100,7 @@ public class AbcWebClient {
             null, request.with(), null, request.where(), request.sort(), request.limit(), request.offset()
         );
         logger.debug("XDB drop request: from={}, some={}", dropRequest.from(), dropRequest.some());
-        AbcResponse response = webClientGeneric.post(ABC_ENDPOINT, dropRequest, AbcResponse.class, abcToken);
+        AbcResponse response = restClientGeneric.post(ABC_ENDPOINT, dropRequest, AbcResponse.class, abcToken);
         logger.debug("XDB drop response: ok={}, status={}", response.ok(), response.status());
         return response;
     }
@@ -117,7 +117,7 @@ public class AbcWebClient {
             null, request.with(), request.puts(), request.where(), request.sort(), request.limit(), request.offset()
         );
         logger.debug("XDB define request: from={}, some={}, puts={}", defineRequest.from(), defineRequest.some(), defineRequest.puts());
-        AbcResponse response = webClientGeneric.post(ABC_ENDPOINT, defineRequest, AbcResponse.class, abcToken);
+        AbcResponse response = restClientGeneric.post(ABC_ENDPOINT, defineRequest, AbcResponse.class, abcToken);
         logger.debug("XDB define response: ok={}, status={}", response.ok(), response.status());
         return response;
     }
@@ -125,7 +125,7 @@ public class AbcWebClient {
     public AbcResponse whoami() {
         AbcRequest request = AbcRequest.builder().call("whoami").build();
         logger.debug("XDB whoami request");
-        AbcResponse response = webClientGeneric.post(ABC_ENDPOINT, request, AbcResponse.class, abcToken);
+        AbcResponse response = restClientGeneric.post(ABC_ENDPOINT, request, AbcResponse.class, abcToken);
         logger.debug("XDB whoami response: ok={}, data={}", response.ok(), response.data());
         return response;
     }
@@ -133,7 +133,7 @@ public class AbcWebClient {
     public AbcResponse signup(Map<String, Object> datax) {
         AbcRequest request = AbcRequest.builder().call("signup").with("USER").puts(datax).build();
         logger.debug("XDB signup request");
-        AbcResponse response = webClientGeneric.post(ABC_ENDPOINT, request, AbcResponse.class, abcToken);
+        AbcResponse response = restClientGeneric.post(ABC_ENDPOINT, request, AbcResponse.class, abcToken);
         logger.debug("XDB signup response: ok={}, status={}", response.ok(), response.status());
         return response;
     }
@@ -149,7 +149,7 @@ public class AbcWebClient {
             case "define" -> define(request);
             default -> {
                 logger.debug("XDB generic ask request: what={}", request.what());
-                AbcResponse response = webClientGeneric.post(ABC_ENDPOINT, request, AbcResponse.class, abcToken);
+                AbcResponse response = restClientGeneric.post(ABC_ENDPOINT, request, AbcResponse.class, abcToken);
                 logger.debug("XDB ask response: ok={}, status={}", response.ok(), response.status());
                 yield response;
             }

@@ -1,44 +1,42 @@
 package co.onmind.hex.transverse;
 
-import co.onmind.hex.infrastructure.configuration.WebClientConfiguration.ExternalServiceException;
+import co.onmind.hex.infrastructure.configuration.RestClientConfiguration.ExternalServiceException;
 import co.onmind.hex.infrastructure.webclients.dto.AbcToken;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
-import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientResponseException;
 
-import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
 
 /**
- * Generic blocking utility over {@link WebClient} for external HTTP calls.
+ * Generic blocking utility over {@link RestClient} for external HTTP calls.
  *
- * <p>Same two flavors as hex4w: plain and with {@link AbcToken} auth header.
- * Calls block with a 30s timeout and retry transient failures (5xx,
- * connection/timeout/IO errors) up to 3 attempts with exponential backoff
- * (500ms, capped at 5s) — mirroring the reactive retry spec from hex4w.
+ * <p>Same two flavors as before: plain and with {@link AbcToken} auth header.
+ * Calls are imperative end-to-end (no reactive types) and retry transient
+ * failures (5xx, connection/timeout/IO errors) up to 3 attempts with
+ * exponential backoff (500ms, capped at 5s).</p>
  */
-public class WebClientGeneric {
+public class RestClientGeneric {
 
-    private static final Logger logger = LoggerFactory.getLogger(WebClientGeneric.class);
-    private static final Duration TIMEOUT = Duration.ofSeconds(30);
+    private static final Logger logger = LoggerFactory.getLogger(RestClientGeneric.class);
     private static final int MAX_ATTEMPTS = 3;
 
-    private final WebClient webClient;
+    private final RestClient restClient;
 
-    public WebClientGeneric(WebClient webClient) {
-        this.webClient = webClient;
+    public RestClientGeneric(RestClient restClient) {
+        this.restClient = restClient;
     }
 
     public <T> T get(String uri, Class<T> responseType) {
         return executeWithRetry(() -> {
             logger.debug("Making GET request to: {}", uri);
-            T result = webClient.get()
+            T result = restClient.get()
                 .uri(uri)
                 .retrieve()
-                .bodyToMono(responseType)
-                .block(TIMEOUT);
+                .body(responseType);
             logger.debug("GET request successful: {}", uri);
             return result;
         }, "GET " + uri);
@@ -46,10 +44,9 @@ public class WebClientGeneric {
 
     public <T> T get(String uri, Class<T> responseType, AbcToken auth) {
         return executeWithRetry(() -> {
-            var spec = webClient.get().uri(uri);
-            String hdr = auth.toHeaderValue();
-            if (!hdr.isEmpty()) spec.header(HttpHeaders.AUTHORIZATION, hdr);
-            T result = spec.retrieve().bodyToMono(responseType).block(TIMEOUT);
+            RestClient.RequestHeadersSpec<?> spec = restClient.get().uri(uri);
+            applyAuth(spec, auth);
+            T result = spec.retrieve().body(responseType);
             logger.debug("GET request successful: {}", uri);
             return result;
         }, "GET " + uri);
@@ -58,11 +55,10 @@ public class WebClientGeneric {
     public <T> List<T> getMany(String uri, Class<T[]> responseType) {
         return executeWithRetry(() -> {
             logger.debug("Making GET request for collection to: {}", uri);
-            T[] result = webClient.get()
+            T[] result = restClient.get()
                 .uri(uri)
                 .retrieve()
-                .bodyToMono(responseType)
-                .block(TIMEOUT);
+                .body(responseType);
             logger.debug("GET collection request successful: {}", uri);
             return result != null ? Arrays.asList(result) : List.of();
         }, "GET " + uri);
@@ -70,10 +66,9 @@ public class WebClientGeneric {
 
     public <T> List<T> getMany(String uri, Class<T[]> responseType, AbcToken auth) {
         return executeWithRetry(() -> {
-            var spec = webClient.get().uri(uri);
-            String hdr = auth.toHeaderValue();
-            if (!hdr.isEmpty()) spec.header(HttpHeaders.AUTHORIZATION, hdr);
-            T[] result = spec.retrieve().bodyToMono(responseType).block(TIMEOUT);
+            RestClient.RequestHeadersSpec<?> spec = restClient.get().uri(uri);
+            applyAuth(spec, auth);
+            T[] result = spec.retrieve().body(responseType);
             logger.debug("GET collection request successful: {}", uri);
             return result != null ? Arrays.asList(result) : List.of();
         }, "GET " + uri);
@@ -82,12 +77,11 @@ public class WebClientGeneric {
     public <T, R> R post(String uri, T body, Class<R> responseType) {
         return executeWithRetry(() -> {
             logger.debug("Making POST request to: {}", uri);
-            R result = webClient.post()
+            R result = restClient.post()
                 .uri(uri)
-                .bodyValue(body)
+                .body(body)
                 .retrieve()
-                .bodyToMono(responseType)
-                .block(TIMEOUT);
+                .body(responseType);
             logger.debug("POST request successful: {}", uri);
             return result;
         }, "POST " + uri);
@@ -95,10 +89,9 @@ public class WebClientGeneric {
 
     public <T, R> R post(String uri, T body, Class<R> responseType, AbcToken auth) {
         return executeWithRetry(() -> {
-            var spec = webClient.post().uri(uri);
-            String hdr = auth.toHeaderValue();
-            if (!hdr.isEmpty()) spec.header(HttpHeaders.AUTHORIZATION, hdr);
-            R result = spec.bodyValue(body).retrieve().bodyToMono(responseType).block(TIMEOUT);
+            RestClient.RequestBodySpec spec = restClient.post().uri(uri);
+            applyAuth(spec, auth);
+            R result = spec.body(body).retrieve().body(responseType);
             logger.debug("POST request successful: {}", uri);
             return result;
         }, "POST " + uri);
@@ -107,12 +100,11 @@ public class WebClientGeneric {
     public <T> void postVoid(String uri, T body) {
         executeWithRetry(() -> {
             logger.debug("Making POST request to: {}", uri);
-            webClient.post()
+            restClient.post()
                 .uri(uri)
-                .bodyValue(body)
+                .body(body)
                 .retrieve()
-                .bodyToMono(Void.class)
-                .block(TIMEOUT);
+                .toBodilessEntity();
             logger.debug("POST request successful: {}", uri);
             return null;
         }, "POST " + uri);
@@ -121,12 +113,11 @@ public class WebClientGeneric {
     public <T, R> R put(String uri, T body, Class<R> responseType) {
         return executeWithRetry(() -> {
             logger.debug("Making PUT request to: {}", uri);
-            R result = webClient.put()
+            R result = restClient.put()
                 .uri(uri)
-                .bodyValue(body)
+                .body(body)
                 .retrieve()
-                .bodyToMono(responseType)
-                .block(TIMEOUT);
+                .body(responseType);
             logger.debug("PUT request successful: {}", uri);
             return result;
         }, "PUT " + uri);
@@ -134,10 +125,9 @@ public class WebClientGeneric {
 
     public <T, R> R put(String uri, T body, Class<R> responseType, AbcToken auth) {
         return executeWithRetry(() -> {
-            var spec = webClient.put().uri(uri);
-            String hdr = auth.toHeaderValue();
-            if (!hdr.isEmpty()) spec.header(HttpHeaders.AUTHORIZATION, hdr);
-            R result = spec.bodyValue(body).retrieve().bodyToMono(responseType).block(TIMEOUT);
+            RestClient.RequestBodySpec spec = restClient.put().uri(uri);
+            applyAuth(spec, auth);
+            R result = spec.body(body).retrieve().body(responseType);
             logger.debug("PUT request successful: {}", uri);
             return result;
         }, "PUT " + uri);
@@ -146,11 +136,10 @@ public class WebClientGeneric {
     public void delete(String uri) {
         executeWithRetry(() -> {
             logger.debug("Making DELETE request to: {}", uri);
-            webClient.delete()
+            restClient.delete()
                 .uri(uri)
                 .retrieve()
-                .bodyToMono(Void.class)
-                .block(TIMEOUT);
+                .toBodilessEntity();
             logger.debug("DELETE request successful: {}", uri);
             return null;
         }, "DELETE " + uri);
@@ -158,13 +147,19 @@ public class WebClientGeneric {
 
     public void delete(String uri, AbcToken auth) {
         executeWithRetry(() -> {
-            var spec = webClient.delete().uri(uri);
-            String hdr = auth.toHeaderValue();
-            if (!hdr.isEmpty()) spec.header(HttpHeaders.AUTHORIZATION, hdr);
-            spec.retrieve().bodyToMono(Void.class).block(TIMEOUT);
+            RestClient.RequestHeadersSpec<?> spec = restClient.delete().uri(uri);
+            applyAuth(spec, auth);
+            spec.retrieve().toBodilessEntity();
             logger.debug("DELETE request successful: {}", uri);
             return null;
         }, "DELETE " + uri);
+    }
+
+    private void applyAuth(RestClient.RequestHeadersSpec<?> spec, AbcToken auth) {
+        String hdr = auth.toHeaderValue();
+        if (!hdr.isEmpty()) {
+            spec.header(HttpHeaders.AUTHORIZATION, hdr);
+        }
     }
 
     private <T> T executeWithRetry(java.util.function.Supplier<T> action, String operation) {
@@ -174,6 +169,23 @@ public class WebClientGeneric {
             attempt++;
             try {
                 return action.get();
+            } catch (RestClientResponseException e) {
+                int status = e.getStatusCode().value();
+                String body = e.getResponseBodyAsString();
+                if (body == null || body.isBlank()) {
+                    body = "Unknown error";
+                }
+                String errorMessage = "HTTP %d error: %s".formatted(status, body);
+                logger.error("External service error: {}", errorMessage);
+                ExternalServiceException failure = new ExternalServiceException(errorMessage, status);
+                if (!isRetryable(failure) || attempt >= MAX_ATTEMPTS) {
+                    logger.error("{} failed: {} - Error: {}", operation, attempt, failure.getMessage());
+                    throw failure;
+                }
+                logger.warn("{} attempt {}/{} failed, retrying in {}ms: {}",
+                    operation, attempt, MAX_ATTEMPTS, backoffMs, failure.getMessage());
+                sleep(backoffMs, operation);
+                backoffMs = Math.min(backoffMs * 2, 5000);
             } catch (Exception e) {
                 if (!isRetryable(e) || attempt >= MAX_ATTEMPTS) {
                     logger.error("{} failed: {} - Error: {}", operation, attempt, e.getMessage());
@@ -181,14 +193,18 @@ public class WebClientGeneric {
                 }
                 logger.warn("{} attempt {}/{} failed, retrying in {}ms: {}",
                     operation, attempt, MAX_ATTEMPTS, backoffMs, e.getMessage());
-                try {
-                    Thread.sleep(backoffMs);
-                } catch (InterruptedException ie) {
-                    Thread.currentThread().interrupt();
-                    throw new RuntimeException("Retry interrupted for " + operation, ie);
-                }
+                sleep(backoffMs, operation);
                 backoffMs = Math.min(backoffMs * 2, 5000);
             }
+        }
+    }
+
+    private void sleep(long backoffMs, String operation) {
+        try {
+            Thread.sleep(backoffMs);
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("Retry interrupted for " + operation, ie);
         }
     }
 
@@ -196,8 +212,13 @@ public class WebClientGeneric {
         if (e instanceof ExternalServiceException ese) {
             return ese.getStatusCode() >= 500;
         }
-        return e instanceof java.net.ConnectException
-            || e instanceof java.util.concurrent.TimeoutException
-            || e instanceof java.io.IOException;
+        for (Throwable current = e; current != null; current = current.getCause()) {
+            if (current instanceof java.net.ConnectException
+                || current instanceof java.util.concurrent.TimeoutException
+                || current instanceof java.io.IOException) {
+                return true;
+            }
+        }
+        return false;
     }
 }

@@ -14,7 +14,7 @@ import com.caoccao.qjs4j.core.JSRuntimeOptions;
 import com.caoccao.qjs4j.core.JSString;
 import com.caoccao.qjs4j.core.JSUndefined;
 import com.caoccao.qjs4j.core.JSValue;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;

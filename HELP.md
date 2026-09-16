@@ -1,10 +1,10 @@
 # Hex4j (hex4j) - Plantilla de Arquitectura Hexagonal Bloqueante
 
-Una implementación completa de arquitectura hexagonal (patrón Ports and Adapters) utilizando Spring Boot MVC (Servlet + Undertow) para programación imperativa/bloqueante.
+Una implementación completa de arquitectura hexagonal (patrón Ports and Adapters) utilizando Spring Boot MVC (Servlet + Tomcat) para programación imperativa/bloqueante.
 
 ## Características
 
-- **Programación Bloqueante**: Construido con Spring Boot MVC sobre Undertow; sin hilos virtuales, sin tipos reactivos
+- **Programación Bloqueante**: Construido con Spring Boot MVC sobre Tomcat; sin hilos virtuales, sin tipos reactivos
 - **Arquitectura Hexagonal**: Separación clara de responsabilidades con capas de dominio, aplicación e infraestructura
 - **Integración JPA**: Acceso a base de datos con Hibernate/JPA sobre H2 en memoria (JDBC)
 - **Controladores REST**: Endpoints con `@RestController` en lugar de enrutamiento funcional
@@ -77,7 +77,7 @@ graph TB
         CONTROLLER[RoleController<br/>@RestController]
         JPA[JPA Repository<br/>JpaRepository]
         CONFIG[MVC Configuration]
-        WEBCLIENT[WebClient bloqueante<br/>External Services]
+        RESTCLIENT[RestClient<br/>External Services]
     end
 
     subgraph "Application Layer (Blocking)"
@@ -104,7 +104,7 @@ graph TB
     UC --> MAP
     MAP --> DTO
     CONFIG --> CONTROLLER
-    WEBCLIENT --> UC
+    RESTCLIENT --> UC
 
     classDef domain fill:#e1f5fe
     classDef application fill:#f3e5f5
@@ -112,7 +112,7 @@ graph TB
 
     class MODEL,SERVICE,EXCEPTIONS domain
     class UC,PIN,POUT,DTO,MAP application
-    class CONTROLLER,JPA,CONFIG,WEBCLIENT infrastructure
+    class CONTROLLER,JPA,CONFIG,RESTCLIENT infrastructure
 ```
 
 ## Flujo Bloqueante Completo del Ejemplo Role
@@ -157,7 +157,7 @@ sequenceDiagram
 ### 2. Características Bloqueantes Clave
 
 - **Objetos directos**: Todos los métodos retornan tipos directos (`T`, `List<T>`, `void`, `Optional<T>`)
-- **Hilos de plataforma**: Sin hilos virtuales; workers de Undertow en toda la aplicación
+- **Hilos de plataforma**: Sin hilos virtuales; workers de Tomcat en toda la aplicación
 - **Transacciones**: Límites `@Transactional` en adaptadores de persistencia
 - **Error Handling**: Excepciones de dominio propagadas a `@ControllerAdvice`
 - **Validación**: Bean Validation con `@Valid` en controllers
@@ -200,14 +200,12 @@ La aplicación se iniciará en el puerto 8080 (datos iniciales: `ADMIN`, `USER`,
 
 3. **Verificar que la aplicación esté funcionando**:
 ```bash
-curl http://localhost:8080/actuator/health
+curl http://localhost:8080/health
 curl http://localhost:8080/api/health
 ```
 
-> **Nota:** `/actuator/health` reporta `DOWN` si no hay Redis disponible
-> (el `RedisHealthIndicator` exige conexión). Es el comportamiento esperado en
-> local sin infraestructura; el endpoint propio `GET /api/health` siempre
-> responde `UP`.
+> **Nota:** `/health` reporta `DOWN` si no hay Redis disponible (el `RedisHealthIndicator` exige conexión).  
+> El endpoint propio `GET /api/health` siempre responde `UP`.
 
 ### Ejecutar Tests
 
@@ -444,11 +442,8 @@ El proyecto utiliza las siguientes dependencias clave:
 
 ```gradle
 dependencies {
-    // Spring Boot MVC + Undertow - Framework bloqueante principal
-    implementation('org.springframework.boot:spring-boot-starter-web') {
-        exclude group: 'org.springframework.boot', module: 'spring-boot-starter-tomcat'
-    }
-    implementation 'org.springframework.boot:spring-boot-starter-undertow'
+    // Spring Boot MVC + Tomcat - Framework bloqueante principal
+    implementation 'org.springframework.boot:spring-boot-starter-webmvc'
 
     // Spring Data JPA - Acceso bloqueante a base de datos
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
@@ -456,8 +451,8 @@ dependencies {
     // H2 - Base de datos en memoria
     runtimeOnly 'com.h2database:h2'
 
-    // WebClient en modo bloqueante (.block()) para XDB y servicios externos
-    implementation 'org.springframework.boot:spring-boot-starter-webflux'
+    // RestClient imperativo para XDB y servicios externos
+    implementation 'org.springframework.boot:spring-boot-starter-restclient'
 
     // Validation - Validación de datos
     implementation 'org.springframework.boot:spring-boot-starter-validation'
@@ -470,7 +465,8 @@ dependencies {
     implementation 'com.caoccao.qjs4j:qjs4j:0.1.1'
 
     // Testing
-    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
 }
 ```
 
@@ -508,7 +504,21 @@ server:
   port: 8080
 ```
 
-Servidor Undertow (se excluye Tomcat del starter web).
+Servidor Tomcat embebido (por defecto en el starter webmvc).
+
+### Configuración de Jackson
+
+Spring Boot 4 usa Jackson 3 (`tools.jackson`, `JsonMapper`) en lugar de Jackson 2.
+Las anotaciones (`@JsonProperty`, `@JsonInclude`, ...) no cambian. El código usa
+`tools.jackson.databind.ObjectMapper` / `JsonMapper` y `JacksonException`.
+
+```yaml
+spring:
+  jackson:
+    time-zone: UTC
+    # Alinea defaults con Jackson 2 de Boot 3.x (ej. fechas como ISO, no timestamps)
+    use-jackson2-defaults: true
+```
 
 ### Configuración XDB (AbcWebClient)
 
@@ -578,7 +588,7 @@ Error:
 #### Notas
 - Kafka deshabilitado por defecto (no requiere broker). `application.yml` excluye `KafkaAutoConfiguration`.
 - Perfil `kafka` lo rehabilita y activa `KafkaEventConsumerAdapter` + `KafkaEventPublisherAdapter`.
-- Dependencia: `org.springframework.kafka:spring-kafka`.
+- Dependencia: `org.springframework.boot:spring-boot-starter-kafka`.
 
 ### AWS SQS (opcional, perfil `sqs`)
 
@@ -786,7 +796,7 @@ app:
 #### Cómo funciona
 
 1. `XdbcUseCase` inyecta `AbcPort` (no `AbcWebClient` directamente).
-2. En `WebClientConfiguration`, el bean `AbcPort` primario (`@Primary`) es un
+2. En `RestClientConfiguration`, el bean `AbcPort` primario (`@Primary`) es un
    `CachedAbcAdapter` que delega a `AbcAdapter`.
 3. En `sheet(show, from, some)`:
    - Se genera la key `abc:sheet:{show}:{from}:{some}`.
@@ -1119,7 +1129,7 @@ implementation 'io.github.resilience4j:resilience4j-circuitbreaker:2.2.0'
 
 ### Configuración de Circuit Breakers
 
-Los beans se definen en `WebClientConfiguration` con la misma configuración base:
+Los beans se definen en `RestClientConfiguration` con la misma configuración base:
 
 | Bean | Servicio protegido |
 |---|---|
@@ -1231,9 +1241,9 @@ escuchando en ese puerto.
 
 La aplicación incluye endpoints de monitoreo:
 
-- `/actuator/health` - Estado de salud de la aplicación (requiere Redis para `UP`)
-- `/actuator/info` - Información de la aplicación
-- `/actuator/metrics` - Métricas de la aplicación
+- `/health` - Estado de salud de la aplicación (requiere Redis para `UP`)
+- `/info` - Información de la aplicación
+- `/metrics` - Métricas de la aplicación
 - `/api/health` - Health check propio (siempre `UP`)
 
 ### Logging Bloqueante
@@ -1334,7 +1344,7 @@ public class MyUseCase {
 response payload de la Lambda. Si Lambda devuelve `functionError`, se lanza
 `RuntimeException`. `invokeAsync` usa `InvocationType.EVENT` (fire-and-forget).
 El `LambdaClient` se configura como un `@Bean` en
-`WebClientConfiguration` (region + endpointOverride configurable).
+`RestClientConfiguration` (region + endpointOverride configurable).
 
 ## Scripts con Acceso a Infraestructura (QuickJS)
 
@@ -1423,7 +1433,7 @@ curl -X POST http://localhost:8080/api/v1/script/execute \
 
 | Perfil | Transporte | Bean `@Primary` |
 |---|---|---|
-| Default | HTTP/WebClient | `AbcAdapter` |
+| Default | HTTP/RestClient | `AbcAdapter` |
 | `grpc` | gRPC bloqueante (puerto 9991) | `GrpcAbcAdapter` |
 
 ```bash

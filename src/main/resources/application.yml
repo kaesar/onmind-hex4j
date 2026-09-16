@@ -54,9 +54,10 @@ spring:
             enable: false
 
   jackson:
-    serialization:
-      write-dates-as-timestamps: false
     time-zone: UTC
+    # Align JsonMapper defaults with Jackson 2 behavior from Boot 3.x
+    # (e.g. write-dates-as-timestamps: false)
+    use-jackson2-defaults: true
 
 server:
   port: 8080
@@ -66,8 +67,6 @@ app:
   webclient:
     connect-timeout: 5000
     read-timeout: 10000
-    write-timeout: 10000
-    max-memory-size: 1048576
   notification:
     email:
       from: hex4j@localhost
@@ -111,6 +110,7 @@ app:
 management:
   endpoints:
     web:
+      base-path: /
       exposure:
         include: health,info,metrics
   endpoint:

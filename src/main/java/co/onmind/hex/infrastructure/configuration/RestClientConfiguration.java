@@ -6,13 +6,10 @@ import co.onmind.hex.infrastructure.webclients.AbcAdapter;
 import co.onmind.hex.infrastructure.webclients.AbcWebClient;
 import co.onmind.hex.infrastructure.webclients.CachedAbcAdapter;
 import co.onmind.hex.infrastructure.webclients.dto.AbcToken;
-import co.onmind.hex.transverse.WebClientGeneric;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import co.onmind.hex.transverse.RestClientGeneric;
+import tools.jackson.databind.ObjectMapper;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
-import io.netty.channel.ChannelOption;
-import io.netty.handler.timeout.ReadTimeoutHandler;
-import io.netty.handler.timeout.WriteTimeoutHandler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -21,24 +18,25 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import org.springframework.context.annotation.Profile;
-import org.springframework.http.client.reactive.ReactorClientHttpConnector;
-import org.springframework.web.reactive.function.client.ExchangeFilterFunction;
-import org.springframework.web.reactive.function.client.WebClient;
-import reactor.core.publisher.Mono;
-import reactor.netty.http.client.HttpClient;
+import org.springframework.http.HttpRequest;
+import org.springframework.http.client.ClientHttpRequestExecution;
+import org.springframework.http.client.ClientHttpRequestInterceptor;
+import org.springframework.http.client.ClientHttpResponse;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.web.client.RestClient;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.lambda.LambdaClient;
 import software.amazon.awssdk.services.s3.S3Client;
 
+import java.io.IOException;
 import java.net.URI;
 import java.time.Duration;
-import java.util.concurrent.TimeUnit;
 
 @Configuration
-public class WebClientConfiguration {
+public class RestClientConfiguration {
 
-    private static final Logger logger = LoggerFactory.getLogger(WebClientConfiguration.class);
+    private static final Logger logger = LoggerFactory.getLogger(RestClientConfiguration.class);
 
     @Value("${app.webclient.connect-timeout:5000}")
     private int connectTimeout;
@@ -46,105 +44,67 @@ public class WebClientConfiguration {
     @Value("${app.webclient.read-timeout:10000}")
     private int readTimeout;
 
-    @Value("${app.webclient.write-timeout:10000}")
-    private int writeTimeout;
-
-    @Value("${app.webclient.max-memory-size:1048576}")
-    private int maxMemorySize;
-
     @Bean
-    public WebClient webClient() {
-        return WebClient.builder()
-            .clientConnector(createClientConnector())
-            .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(maxMemorySize))
-            .filter(logRequest())
-            .filter(logResponse())
-            .filter(handleErrors())
+    public RestClient restClient(RestClient.Builder builder) {
+        return builder
+            .requestFactory(createRequestFactory())
+            .requestInterceptor(logExchange())
             .build();
     }
 
     @Bean
-    public WebClientGeneric webClientGeneric(WebClient webClient) {
-        return new WebClientGeneric(webClient);
+    public RestClientGeneric restClientGeneric(RestClient restClient) {
+        return new RestClientGeneric(restClient);
     }
 
-    private ReactorClientHttpConnector createClientConnector() {
-        HttpClient httpClient = HttpClient.create()
-            .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, connectTimeout)
-            .responseTimeout(Duration.ofMillis(readTimeout))
-            .doOnConnected(conn ->
-                conn.addHandlerLast(new ReadTimeoutHandler(readTimeout, TimeUnit.MILLISECONDS))
-                    .addHandlerLast(new WriteTimeoutHandler(writeTimeout, TimeUnit.MILLISECONDS))
-            );
-
-        return new ReactorClientHttpConnector(httpClient);
+    private SimpleClientHttpRequestFactory createRequestFactory() {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(Duration.ofMillis(connectTimeout));
+        factory.setReadTimeout(Duration.ofMillis(readTimeout));
+        return factory;
     }
 
-    private ExchangeFilterFunction logRequest() {
-        return ExchangeFilterFunction.ofRequestProcessor(clientRequest -> {
+    private ClientHttpRequestInterceptor logExchange() {
+        return (HttpRequest request, byte[] body, ClientHttpRequestExecution execution) -> {
             if (logger.isDebugEnabled()) {
                 logger.debug("Outgoing request: {} {} - Headers: {}",
-                    clientRequest.method(),
-                    clientRequest.url(),
-                    clientRequest.headers()
+                    request.getMethod(),
+                    request.getURI(),
+                    request.getHeaders()
                 );
             } else {
                 logger.info("Outgoing request: {} {}",
-                    clientRequest.method(),
-                    clientRequest.url()
+                    request.getMethod(),
+                    request.getURI()
                 );
             }
-            return Mono.just(clientRequest);
-        });
-    }
-
-    private ExchangeFilterFunction logResponse() {
-        return ExchangeFilterFunction.ofResponseProcessor(clientResponse -> {
-            if (logger.isDebugEnabled()) {
-                logger.debug("Incoming response: {} - Headers: {}",
-                    clientResponse.statusCode(),
-                    clientResponse.headers().asHttpHeaders()
-                );
-            } else {
-                logger.info("Incoming response: {}", clientResponse.statusCode());
+            try {
+                ClientHttpResponse response = execution.execute(request, body);
+                if (logger.isDebugEnabled()) {
+                    logger.debug("Incoming response: {} - Headers: {}",
+                        response.getStatusCode(),
+                        response.getHeaders()
+                    );
+                } else {
+                    logger.info("Incoming response: {}", response.getStatusCode());
+                }
+                return response;
+            } catch (IOException e) {
+                logger.error("HTTP exchange failed: {} {} - Error: {}",
+                    request.getMethod(), request.getURI(), e.getMessage());
+                throw e;
             }
-            return Mono.just(clientResponse);
-        });
-    }
-
-    private ExchangeFilterFunction handleErrors() {
-        return ExchangeFilterFunction.ofResponseProcessor(clientResponse -> {
-            if (clientResponse.statusCode().isError()) {
-                return clientResponse.bodyToMono(String.class)
-                    .defaultIfEmpty("Unknown error")
-                    .flatMap(errorBody -> {
-                        String errorMessage = String.format(
-                            "HTTP %d error: %s",
-                            clientResponse.statusCode().value(),
-                            errorBody
-                        );
-
-                        logger.error("External service error: {}", errorMessage);
-
-                        return Mono.error(new ExternalServiceException(
-                            errorMessage,
-                            clientResponse.statusCode().value()
-                        ));
-                    });
-            }
-            return Mono.just(clientResponse);
-        });
+        };
     }
 
     @Bean
-    public WebClient xdbWebClient(@Value("${app.xdb.base-url:http://localhost:9990}") String baseUrl) {
-        return WebClient.builder()
+    public RestClient xdbRestClient(
+            RestClient.Builder builder,
+            @Value("${app.xdb.base-url:http://localhost:9990}") String baseUrl) {
+        return builder
             .baseUrl(baseUrl)
-            .clientConnector(createClientConnector())
-            .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(maxMemorySize))
-            .filter(logRequest())
-            .filter(logResponse())
-            .filter(handleErrors())
+            .requestFactory(createRequestFactory())
+            .requestInterceptor(logExchange())
             .defaultHeader("Content-Type", "application/json")
             .defaultHeader("Accept", "application/json")
             .build();
@@ -152,10 +112,10 @@ public class WebClientConfiguration {
 
     @Bean
     public AbcWebClient abcWebClientBean(
-            @Qualifier("xdbWebClient") WebClient xdbWebClient,
+            @Qualifier("xdbRestClient") RestClient xdbRestClient,
             @Value("${app.xdb.auth-type:none}") String authType,
             @Value("${app.xdb.auth-token:}") String authToken) {
-        WebClientGeneric xdbWebClientGeneric = new WebClientGeneric(xdbWebClient);
+        RestClientGeneric xdbRestClientGeneric = new RestClientGeneric(xdbRestClient);
         AbcToken token = switch (authType.toLowerCase()) {
             case "bearer" -> AbcToken.bearer(authToken);
             case "basic" -> {
@@ -166,7 +126,7 @@ public class WebClientConfiguration {
             }
             default -> AbcToken.none();
         };
-        return new AbcWebClient(xdbWebClientGeneric, token);
+        return new AbcWebClient(xdbRestClientGeneric, token);
     }
 
     @Bean

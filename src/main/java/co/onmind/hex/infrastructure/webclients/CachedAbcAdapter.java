@@ -4,8 +4,8 @@ import co.onmind.hex.application.ports.out.AbcPort;
 import co.onmind.hex.application.ports.out.CachePort;
 import co.onmind.hex.infrastructure.webclients.dto.AbcRequest;
 import co.onmind.hex.infrastructure.webclients.dto.AbcResponse;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,7 +39,7 @@ public class CachedAbcAdapter implements AbcPort {
                     AbcResponse cachedResponse = objectMapper.readValue(cached, AbcResponse.class);
                     logger.debug("Cache HIT key={}", key);
                     return cachedResponse;
-                } catch (JsonProcessingException e) {
+                } catch (JacksonException e) {
                     logger.warn("Cache value for key={} could not be deserialized, ignoring", key);
                 }
             }
@@ -72,7 +72,7 @@ public class CachedAbcAdapter implements AbcPort {
     private String serialize(AbcResponse response, String key) {
         try {
             return objectMapper.writeValueAsString(response);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             logger.warn("Unable to serialize AbcResponse for cache at key={}", key, e);
             return null;
         }

@@ -4,7 +4,7 @@ import co.onmind.hex.application.dto.in.KafkaScriptCommand;
 import co.onmind.hex.application.dto.out.ScriptResultResponseDto;
 import co.onmind.hex.application.ports.in.ExecuteScriptTrait;
 import co.onmind.hex.application.ports.out.EventPublisherPort;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;

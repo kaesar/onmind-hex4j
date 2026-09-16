@@ -2,7 +2,8 @@ package co.onmind.hex.infrastructure.scripts;
 
 import co.onmind.hex.application.ports.out.ScriptServicesPort;
 import co.onmind.hex.domain.models.ScriptResult;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -18,7 +19,7 @@ class QuickJsAdapterTest {
     @BeforeEach
     void setUp() {
         ScriptServicesPort services = mock(ScriptServicesPort.class);
-        adapter = new QuickJsAdapter(services, new ObjectMapper());
+        adapter = new QuickJsAdapter(services, new JsonMapper());
     }
 
     @Test
@@ -65,7 +66,7 @@ class QuickJsAdapterTest {
     void exposesServices() {
         ScriptServicesPort services = mock(ScriptServicesPort.class);
         when(services.cacheGet("k")).thenReturn("v");
-        QuickJsAdapter adapterWithServices = new QuickJsAdapter(services, new ObjectMapper());
+        QuickJsAdapter adapterWithServices = new QuickJsAdapter(services, new JsonMapper());
 
         ScriptResult result = adapterWithServices.executeScript("services.cacheGet('k')");
 

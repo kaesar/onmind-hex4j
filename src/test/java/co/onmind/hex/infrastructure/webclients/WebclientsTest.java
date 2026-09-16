@@ -3,7 +3,8 @@ package co.onmind.hex.infrastructure.webclients;
 import co.onmind.hex.application.ports.out.CachePort;
 import co.onmind.hex.infrastructure.webclients.dto.AbcRequest;
 import co.onmind.hex.infrastructure.webclients.dto.AbcResponse;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -33,7 +34,7 @@ class WebclientsTest {
     @BeforeEach
     void setUp() {
         circuitBreaker = CircuitBreaker.ofDefaults("test");
-        objectMapper = new ObjectMapper();
+        objectMapper = new JsonMapper();
     }
 
     @Test

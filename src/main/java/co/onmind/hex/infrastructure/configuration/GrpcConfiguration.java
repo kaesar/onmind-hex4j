@@ -5,7 +5,7 @@ import co.onmind.hex.application.ports.out.AbcPort;
 import co.onmind.hex.application.ports.out.CachePort;
 import co.onmind.hex.infrastructure.webclients.CachedAbcAdapter;
 import co.onmind.hex.infrastructure.webclients.GrpcAbcAdapter;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;

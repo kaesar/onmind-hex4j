@@ -43,7 +43,7 @@ This implementation presents a variation of traditional hexagonal architecture:
 ## Technologies
 
 - **Java 21**: Modern programming language
-- **Spring Boot 3.5.14**: Reactive and lightweight web framework
+- **Spring Boot 4.1.1**: Reactive and lightweight web framework
 - **Gradle**: Dependency manager and build tool
 - **H2 Database**: In-memory database for development
 - **JUnit 5**: Modern testing framework

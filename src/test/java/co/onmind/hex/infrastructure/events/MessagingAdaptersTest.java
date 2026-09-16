@@ -3,7 +3,8 @@ package co.onmind.hex.infrastructure.events;
 import co.onmind.hex.application.dto.out.ScriptResultResponseDto;
 import co.onmind.hex.application.ports.in.ExecuteScriptTrait;
 import co.onmind.hex.application.ports.out.EventPublisherPort;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -26,7 +27,7 @@ class MessagingAdaptersTest {
     @Mock private ExecuteScriptTrait executeScriptTrait;
     @Mock private EventPublisherPort eventPublisher;
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper = new JsonMapper();
 
     @Test
     @DisplayName("KafkaEventPublisherAdapter sends via KafkaTemplate")
