@@ -9,9 +9,12 @@ group = 'co.onmind'
 version = '0.3.0-SNAPSHOT'
 
 java {
-    sourceCompatibility = '21'
+    // Java 25 is required for Virtual Threads to be effective: JEP 491 (JDK 24+) removed
+    // `synchronized` pinning, which is what makes blocking JDBC (Hibernate/H2) viable
+    // on virtual threads. Run with: sdk use java 25.0.2-graalce
+    sourceCompatibility = '25'
     toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
+        languageVersion = JavaLanguageVersion.of(25)
     }
 }
 
@@ -23,7 +26,7 @@ configurations {
 
 repositories {
     mavenCentral()
-    maven { url 'https://repo1.maven.org/maven2' }
+    maven { url = 'https://repo1.maven.org/maven2' }
 }
 
 def xdbJar = file('../api/xdb/build/libs/onmind-xdb-1.0.0-early2026.jar')
@@ -75,8 +78,11 @@ dependencies {
         implementation files(xdbJar)
     }
 
-    // Redis (blocking) for caching layer
+    // Redis (blocking) for caching layer.
+    // commons-pool2 enables the Lettuce connection pool — required with virtual threads
+    // so concurrent calls do not funnel through a single shared native connection.
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    implementation 'org.apache.commons:commons-pool2'
 
     // Spring Mail — blocking email via JavaMail
     implementation 'org.springframework.boot:spring-boot-starter-mail'

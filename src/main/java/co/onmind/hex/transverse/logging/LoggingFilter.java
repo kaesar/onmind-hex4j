@@ -51,12 +51,14 @@ public class LoggingFilter extends OncePerRequestFilter {
             MDC.put("path", request.getRequestURI());
             MDC.put("timestamp", LocalDateTime.now().format(TIMESTAMP_FORMATTER));
 
-            logger.info("Incoming request: {} {} - RequestId: {} - RemoteAddress: {} - UserAgent: {}",
+            logger.info("Incoming request: {} {} - RequestId: {} - RemoteAddress: {} - UserAgent: {} - Thread: {} (virtual: {})",
                 request.getMethod(),
                 request.getRequestURI(),
                 requestId,
                 getRemoteAddress(request),
-                getUserAgent(request)
+                getUserAgent(request),
+                Thread.currentThread().getName(),
+                Thread.currentThread().isVirtual()
             );
 
             if (request.getQueryString() != null) {

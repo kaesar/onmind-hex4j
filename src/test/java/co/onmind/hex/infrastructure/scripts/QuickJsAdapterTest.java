@@ -19,7 +19,7 @@ class QuickJsAdapterTest {
     @BeforeEach
     void setUp() {
         ScriptServicesPort services = mock(ScriptServicesPort.class);
-        adapter = new QuickJsAdapter(services, new JsonMapper());
+        adapter = new QuickJsAdapter(services, new JsonMapper(), new ScriptExecutionExecutor(2, 30));
     }
 
     @Test
@@ -66,7 +66,8 @@ class QuickJsAdapterTest {
     void exposesServices() {
         ScriptServicesPort services = mock(ScriptServicesPort.class);
         when(services.cacheGet("k")).thenReturn("v");
-        QuickJsAdapter adapterWithServices = new QuickJsAdapter(services, new JsonMapper());
+        QuickJsAdapter adapterWithServices =
+                new QuickJsAdapter(services, new JsonMapper(), new ScriptExecutionExecutor(2, 30));
 
         ScriptResult result = adapterWithServices.executeScript("services.cacheGet('k')");
 

@@ -1,6 +1,6 @@
-# Hex4j - Hexagonal Architecture with Java and Spring Boot
+# Hex4j - Hexagonal Architecture - Java & Spring Boot
 
-This project implements a hexagonal architecture approach using Java 21, Spring Boot Framework and Gradle, with ports and use cases located in the application layer.
+This project implements a hexagonal architecture approach using Java 25, Spring Boot Framework and Gradle, with ports and use cases located in the application layer.
 
 ## Architecture
 
@@ -42,8 +42,8 @@ This implementation presents a variation of traditional hexagonal architecture:
 
 ## Technologies
 
-- **Java 21**: Modern programming language
-- **Spring Boot 4.1.1**: Reactive and lightweight web framework
+- **Java 25**: Modern programming language (virtual threads, JEP 491 un-pinning, scoped values)
+- **Spring Boot 4.1.1**: Lightweight web framework on virtual threads
 - **Gradle**: Dependency manager and build tool
 - **H2 Database**: In-memory database for development
 - **JUnit 5**: Modern testing framework
@@ -58,7 +58,7 @@ This implementation presents a variation of traditional hexagonal architecture:
 - **Enhanced HTTP error handling**
 - **H2 database** with automatic initialization
 - **Structured logging** for monitoring
-- **Sandboxed scripting** with QuickJS (Java 21)
+- **Sandboxed scripting** with QuickJS (Java 25)
 
 ## Features
 
@@ -164,8 +164,46 @@ curl "http://localhost:8080/api/v1/roles/search?name=ADMIN"
 ## Execution
 
 ### Requirements
-- **Java 21+** (recommended to leverage new features)
-- **Gradle 8+** with Kotlin DSL support
+- **Java 25** (`sdk use java 25.0.2-graalce`) — required, not just recommended
+- **Gradle 9+** (the wrapper pins 9.7.1; Gradle ≥ 9.1 is needed to run the daemon on Java 25)
+
+## Virtual Threads
+
+The application is **blocking end to end** — Spring MVC, JPA/Hibernate, synchronous Redis and
+synchronous AWS SDK clients — but it runs on **virtual threads**:
+
+```yaml
+spring:
+  threads:
+    virtual:
+      enabled: true
+```
+
+Every HTTP request gets its own virtual thread instead of one of Tomcat's 200 platform workers.
+Blocking I/O (JDBC, HTTP, SMTP, S3) unmounts the virtual thread from its carrier, so a slow
+downstream no longer consumes a worker.
+
+Three supporting details matter as much as the flag itself:
+
+| Concern | Why | Where |
+|---|---|---|
+| **Scripting is CPU-bound** | A CPU-bound task on a virtual thread occupies a *carrier* thread for its whole run; a few concurrent scripts would starve the whole process. Scripts therefore run on a bounded pool of **platform** threads. | `ScriptExecutionExecutor`, `app.scripts.pool-size` / `app.scripts.timeout-seconds` |
+| **Lettuce must not share one socket** | By default all Redis operations share a single native connection, which serializes concurrent traffic. | `RedisConfiguration` (`shareNativeConnection = false`) + `spring.data.redis.lettuce.pool.*` |
+| **The HTTP client must multiplex** | `HttpURLConnection` (`SimpleClientHttpRequestFactory`) cannot multiplex; the NIO-based JDK client can. | `RestClientConfiguration` → `JdkClientHttpRequestFactory`, `spring.http.clients.imperative.factory: jdk` |
+
+Two additional limits become the real ones once the web server stops capping concurrency:
+
+- **Hikari** — `spring.datasource.hikari.maximum-pool-size` is now the database concurrency limit.
+- **AWS SDK** — `app.aws.max-connections` (default 100) replaces the SDK's default of 50.
+
+To confirm the setup at runtime, the request log includes the serving thread and whether it is
+virtual:
+
+```
+Incoming request: GET /api/health - RequestId: ba208525 - ... - Thread: tomcat-handler-0 (virtual: true)
+```
+
+`VirtualThreadsIT` asserts all of the above at boot time.
 
 1. Create domain model in `domain/models/`
 2. Create domain exceptions in `domain/exceptions/`

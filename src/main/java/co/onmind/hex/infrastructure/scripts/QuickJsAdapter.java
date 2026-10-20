@@ -31,20 +31,36 @@ public class QuickJsAdapter implements ScriptingPort {
 
     private final ScriptServicesPort scriptServices;
     private final ObjectMapper objectMapper;
+    private final ScriptExecutionExecutor scriptExecutor;
 
-    public QuickJsAdapter(ScriptServicesPort scriptServices, ObjectMapper objectMapper) {
+    public QuickJsAdapter(ScriptServicesPort scriptServices, ObjectMapper objectMapper,
+                          ScriptExecutionExecutor scriptExecutor) {
         this.scriptServices = scriptServices;
         this.objectMapper = objectMapper;
+        this.scriptExecutor = scriptExecutor;
         logger.info("QuickJS engine adapter initialized for sandboxed execution");
     }
 
     @Override
     public ScriptResult executeScript(String script) {
+        // The script runs on a bounded pool of platform threads: it is CPU-bound, so
+        // executing it on the (virtual) request thread would occupy a carrier thread
+        // for the whole run and starve every other virtual thread in the process.
+        try {
+            return scriptExecutor.execute(() -> runScript(script));
+        } catch (ScriptExecutionException e) {
+            logger.warn("Script execution rejected: {}", e.getMessage());
+            return new ScriptResult(null, "", e.getMessage());
+        }
+    }
+
+    private ScriptResult runScript(String script) {
         StringBuilder stdout = new StringBuilder();
         // NOTE (qjs4j 0.1.1): setMaxMemoryUsage bounds ArrayBuffer/SharedArrayBuffer
         // allocations, other heap usage is bounded by -Xmx. There is no script
         // time-limit API in 0.1.1 (interrupt support only exists on unreleased main),
-        // so the script whitelist remains the primary sandbox control.
+        // so the script whitelist remains the primary sandbox control and the
+        // executor watchdog is the only guard against a runaway script.
         JSRuntimeOptions options = new JSRuntimeOptions()
             .setMaxMemoryUsage(SCRIPT_MEMORY_LIMIT_BYTES);
         try (JSRuntime runtime = new JSRuntime(options);

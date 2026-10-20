@@ -5,11 +5,24 @@ spring:
   profiles:
     active: dev
 
+  # ── Virtual Threads (requires Java 21+, ideally 25) ────────────────────────────
+  # Tomcat no longer caps concurrency at server.tomcat.threads.max: each request
+  # gets its own virtual thread and blocking I/O unmounts it from the carrier pool.
+  threads:
+    virtual:
+      enabled: true
+
   datasource:
     url: jdbc:h2:mem:hex4j;LOCK_TIMEOUT=10000;DB_CLOSE_ON_EXIT=FALSE
     driver-class-name: org.h2.Driver
     username: sa
     password: ''
+    hikari:
+      # With virtual threads the pool, not the web server, is the real concurrency
+      # limit. Size it against the database capacity, not against request rate.
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 3000
   jpa:
     hibernate:
       ddl-auto: create-drop
@@ -33,12 +46,29 @@ spring:
     exclude:
       - org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
 
-  # Redis (Lettuce, blocking) — used by the XDB cache adapter
+  # HTTP client used by RestClient. The JDK client is NIO-based and multiplexes
+  # connections, which is what virtual threads need; SimpleClientHttpRequestFactory
+  # (HttpURLConnection) is the worst fit.
+  http:
+    clients:
+      imperative:
+        factory: jdk
+
+  # Redis (Lettuce, blocking) — used by the XDB cache adapter.
+  # The pool is mandatory here: by default Lettuce shares ONE native connection
+  # for every operation, which serializes all concurrent cache traffic.
   data:
     redis:
       host: localhost
       port: 6379
       timeout: 2000ms
+      lettuce:
+        pool:
+          enabled: true
+          max-active: 32
+          max-idle: 16
+          min-idle: 4
+          max-wait: 2000ms
 
   # Mail (SMTP) — used by SmtpEmailAdapter; Mailpit on port 1025 for tests
   mail:
@@ -78,6 +108,9 @@ app:
   aws:
     region: us-east-1
     endpoint: http://localhost:4566
+    # Max concurrent HTTP connections of the AWS SDK clients. The SDK default is 50,
+    # which becomes the real bottleneck as soon as Tomcat stops capping concurrency.
+    max-connections: 100
   s3:
     region: us-east-1
     endpoint: http://localhost:4566
@@ -96,6 +129,13 @@ app:
   scripts:
     location: classpath:scripts/
     whitelist: hello.js,example.js,services.js
+    # Scripts are CPU-bound, so they run on a bounded pool of platform threads
+    # instead of the request thread — a virtual thread would occupy a carrier
+    # thread for the whole execution. pool-size 0 = auto (availableProcessors).
+    pool-size: 0
+    # Watchdog timeout. qjs4j 0.1.1 has no interrupt support, so a runaway script
+    # keeps its worker until it returns on its own, but the caller is released.
+    timeout-seconds: 30
   xdb:
     base-url: http://localhost:9990
     grpc:

@@ -23,11 +23,13 @@ public class AwsClientsConfiguration {
     @Profile("sqs")
     public SqsClient sqsClient(
             @Value("${app.aws.region:us-east-1}") String region,
-            @Value("${app.aws.endpoint:#{null}}") String endpoint) {
+            @Value("${app.aws.endpoint:#{null}}") String endpoint,
+            @Value("${app.aws.max-connections:100}") int maxConnections) {
         logger.info("Creating SQS sync client region={} endpoint={}", region, endpoint);
         var builder = SqsClient.builder()
             .region(Region.of(region))
-            .credentialsProvider(DefaultCredentialsProvider.create());
+            .credentialsProvider(DefaultCredentialsProvider.create())
+            .httpClientBuilder(AwsHttpClientFactory.httpClientBuilder(maxConnections));
         if (endpoint != null && !endpoint.isBlank()) {
             builder.endpointOverride(URI.create(endpoint));
         }
@@ -38,11 +40,13 @@ public class AwsClientsConfiguration {
     @Profile("sns")
     public SnsClient snsClient(
             @Value("${app.aws.region:us-east-1}") String region,
-            @Value("${app.aws.endpoint:#{null}}") String endpoint) {
+            @Value("${app.aws.endpoint:#{null}}") String endpoint,
+            @Value("${app.aws.max-connections:100}") int maxConnections) {
         logger.info("Creating SNS sync client region={} endpoint={}", region, endpoint);
         var builder = SnsClient.builder()
             .region(Region.of(region))
-            .credentialsProvider(DefaultCredentialsProvider.create());
+            .credentialsProvider(DefaultCredentialsProvider.create())
+            .httpClientBuilder(AwsHttpClientFactory.httpClientBuilder(maxConnections));
         if (endpoint != null && !endpoint.isBlank()) {
             builder.endpointOverride(URI.create(endpoint));
         }
@@ -53,11 +57,13 @@ public class AwsClientsConfiguration {
     @Profile("eventbridge")
     public EventBridgeClient eventBridgeClient(
             @Value("${app.aws.region:us-east-1}") String region,
-            @Value("${app.aws.endpoint:#{null}}") String endpoint) {
+            @Value("${app.aws.endpoint:#{null}}") String endpoint,
+            @Value("${app.aws.max-connections:100}") int maxConnections) {
         logger.info("Creating EventBridge sync client region={} endpoint={}", region, endpoint);
         var builder = EventBridgeClient.builder()
             .region(Region.of(region))
-            .credentialsProvider(DefaultCredentialsProvider.create());
+            .credentialsProvider(DefaultCredentialsProvider.create())
+            .httpClientBuilder(AwsHttpClientFactory.httpClientBuilder(maxConnections));
         if (endpoint != null && !endpoint.isBlank()) {
             builder.endpointOverride(URI.create(endpoint));
         }

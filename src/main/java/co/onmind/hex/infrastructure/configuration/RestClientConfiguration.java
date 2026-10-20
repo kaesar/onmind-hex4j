@@ -20,17 +20,20 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpRequest;
 import org.springframework.http.client.ClientHttpRequestExecution;
+import org.springframework.http.client.ClientHttpRequestFactory;
 import org.springframework.http.client.ClientHttpRequestInterceptor;
 import org.springframework.http.client.ClientHttpResponse;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
+import software.amazon.awssdk.http.apache.ApacheHttpClient;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.lambda.LambdaClient;
 import software.amazon.awssdk.services.s3.S3Client;
 
 import java.io.IOException;
 import java.net.URI;
+import java.net.http.HttpClient;
 import java.time.Duration;
 
 @Configuration
@@ -45,9 +48,9 @@ public class RestClientConfiguration {
     private int readTimeout;
 
     @Bean
-    public RestClient restClient(RestClient.Builder builder) {
+    public RestClient restClient(RestClient.Builder builder, ClientHttpRequestFactory requestFactory) {
         return builder
-            .requestFactory(createRequestFactory())
+            .requestFactory(requestFactory)
             .requestInterceptor(logExchange())
             .build();
     }
@@ -57,9 +60,27 @@ public class RestClientConfiguration {
         return new RestClientGeneric(restClient);
     }
 
-    private SimpleClientHttpRequestFactory createRequestFactory() {
-        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(Duration.ofMillis(connectTimeout));
+    /**
+     * Creates the request factory backed by the JDK {@link java.net.http.HttpClient}.
+     * <p>
+     * The JDK client is NIO-based and multiplexes connections over a small number of
+     * event loops, which is the profile virtual threads need: thousands of concurrent
+     * requests share the same connections instead of opening one socket per request.
+     * {@code SimpleClientHttpRequestFactory} (HttpURLConnection) was previously used
+     * and is the worst possible choice under concurrency — it keeps a global
+     * keep-alive cache per destination, does not support HTTP/2 and has no
+     * per-request read timeout.
+     * </p>
+     */
+    @Bean
+    public ClientHttpRequestFactory clientHttpRequestFactory() {
+        HttpClient httpClient = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofMillis(connectTimeout))
+            .version(HttpClient.Version.HTTP_2)
+            .followRedirects(HttpClient.Redirect.NORMAL)
+            .build();
+
+        JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(httpClient);
         factory.setReadTimeout(Duration.ofMillis(readTimeout));
         return factory;
     }
@@ -100,10 +121,11 @@ public class RestClientConfiguration {
     @Bean
     public RestClient xdbRestClient(
             RestClient.Builder builder,
+            ClientHttpRequestFactory requestFactory,
             @Value("${app.xdb.base-url:http://localhost:9990}") String baseUrl) {
         return builder
             .baseUrl(baseUrl)
-            .requestFactory(createRequestFactory())
+            .requestFactory(requestFactory)
             .requestInterceptor(logExchange())
             .defaultHeader("Content-Type", "application/json")
             .defaultHeader("Accept", "application/json")
@@ -153,11 +175,13 @@ public class RestClientConfiguration {
     public S3Client s3Client(
             @Value("${app.s3.region:us-east-1}") String region,
             @Value("${app.s3.endpoint:#{null}}") String endpoint,
-            @Value("${app.s3.force-path-style:true}") boolean forcePathStyle) {
+            @Value("${app.s3.force-path-style:true}") boolean forcePathStyle,
+            @Value("${app.aws.max-connections:100}") int maxConnections) {
 
         var builder = S3Client.builder()
             .region(Region.of(region))
-            .credentialsProvider(DefaultCredentialsProvider.create());
+            .credentialsProvider(DefaultCredentialsProvider.create())
+            .httpClientBuilder(AwsHttpClientFactory.httpClientBuilder(maxConnections));
 
         if (endpoint != null && !endpoint.isBlank()) {
             builder.endpointOverride(URI.create(endpoint));
@@ -173,11 +197,13 @@ public class RestClientConfiguration {
     @Bean
     public LambdaClient lambdaClient(
             @Value("${app.lambda.region:us-east-1}") String region,
-            @Value("${app.lambda.endpoint:#{null}}") String endpoint) {
+            @Value("${app.lambda.endpoint:#{null}}") String endpoint,
+            @Value("${app.aws.max-connections:100}") int maxConnections) {
 
         var builder = LambdaClient.builder()
                 .region(Region.of(region))
-                .credentialsProvider(DefaultCredentialsProvider.create());
+                .credentialsProvider(DefaultCredentialsProvider.create())
+                .httpClientBuilder(AwsHttpClientFactory.httpClientBuilder(maxConnections));
 
         if (endpoint != null && !endpoint.isBlank()) {
             builder.endpointOverride(URI.create(endpoint));

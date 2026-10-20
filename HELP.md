@@ -1,4 +1,4 @@
-# Hex4j (hex4j) - Plantilla de Arquitectura Hexagonal Bloqueante
+# Hex4j - Plantilla de Arquitectura Hexagonal Bloqueante
 
 Una implementación completa de arquitectura hexagonal (patrón Ports and Adapters) utilizando Spring Boot MVC (Servlet + Tomcat) para programación imperativa/bloqueante.
 
