@@ -5,8 +5,12 @@ plugins {
     id 'jacoco'
 }
 
+// Boot 4.1.1 manages Jackson 3.1.5, which carries CVE-2026-110879.
+// Overridden to 3.1.8, the LTS patch line within the same minor.
+ext['jackson-bom.version'] = '3.1.8'
+
 group = 'co.onmind'
-version = '0.3.0-SNAPSHOT'
+version = '0.5.0-SNAPSHOT'
 
 java {
     // Java 25 is required for Virtual Threads to be effective: JEP 491 (JDK 24+) removed
@@ -90,8 +94,12 @@ dependencies {
     // Spring for GraphQL (BFF endpoint exposing /abc as GraphQL)
     implementation 'org.springframework.boot:spring-boot-starter-graphql'
 
-    // Resilience4j — Circuit Breaker for blocking adapters
+    // Resilience4j — Circuit Breaker, Bulkhead and Rate Limiter for the blocking adapters.
+    // The bulkhead and the rate limiter are what keep virtual threads from flooding a
+    // downstream: they cap how many calls are in flight and how many are allowed per period.
     implementation 'io.github.resilience4j:resilience4j-circuitbreaker:2.2.0'
+    implementation 'io.github.resilience4j:resilience4j-bulkhead:2.2.0'
+    implementation 'io.github.resilience4j:resilience4j-ratelimiter:2.2.0'
 
     // Lombok (optional, for reducing boilerplate)
     compileOnly 'org.projectlombok:lombok'

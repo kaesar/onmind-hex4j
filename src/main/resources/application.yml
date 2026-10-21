@@ -111,6 +111,13 @@ app:
     # Max concurrent HTTP connections of the AWS SDK clients. The SDK default is 50,
     # which becomes the real bottleneck as soon as Tomcat stops capping concurrency.
     max-connections: 100
+  sqs:
+    # Gap between the end of a batch and the start of the next poll.
+    # SQS long polling already waits up to 20s for a message.
+    poll-interval-ms: 1000
+    # How long SQS hides a received message. Must exceed app.scripts.timeout-seconds,
+    # otherwise the message reappears while still being processed.
+    visibility-timeout-seconds: 120
   s3:
     region: us-east-1
     endpoint: http://localhost:4566
@@ -136,6 +143,18 @@ app:
     # Watchdog timeout. qjs4j 0.1.1 has no interrupt support, so a runaway script
     # keeps its worker until it returns on its own, but the caller is released.
     timeout-seconds: 30
+  # Limits per downstream: calls in flight and calls allowed per period.
+  # Optional, the defaults in ResilienceProperties are already sensible.
+  resilience:
+    abc:
+      max-concurrent-calls: 20
+      rate-limit-per-period: 50
+    s3:
+      max-concurrent-calls: 10
+      rate-limit-per-period: 20
+    lambda:
+      max-concurrent-calls: 10
+      rate-limit-per-period: 20
   xdb:
     base-url: http://localhost:9990
     grpc:

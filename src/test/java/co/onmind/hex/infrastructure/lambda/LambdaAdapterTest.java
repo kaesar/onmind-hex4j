@@ -1,6 +1,6 @@
 package co.onmind.hex.infrastructure.lambda;
 
-import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import co.onmind.hex.transverse.resilience.TestGuards;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -26,7 +26,7 @@ class LambdaAdapterTest {
 
     @BeforeEach
     void setUp() {
-        adapter = new LambdaAdapter(lambdaClient, CircuitBreaker.ofDefaults("test"));
+        adapter = new LambdaAdapter(lambdaClient, TestGuards.permissive());
     }
 
     @Test

@@ -6,10 +6,9 @@ import co.onmind.hex.infrastructure.webclients.AbcAdapter;
 import co.onmind.hex.infrastructure.webclients.AbcWebClient;
 import co.onmind.hex.infrastructure.webclients.CachedAbcAdapter;
 import co.onmind.hex.infrastructure.webclients.dto.AbcToken;
+import co.onmind.hex.transverse.resilience.OutboundGuard;
 import co.onmind.hex.transverse.RestClientGeneric;
 import tools.jackson.databind.ObjectMapper;
-import io.github.resilience4j.circuitbreaker.CircuitBreaker;
-import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -155,8 +154,8 @@ public class RestClientConfiguration {
     @Profile("!grpc")
     public AbcAdapter abcAdapter(
             AbcWebClient abcWebClient,
-            CircuitBreaker abcCircuitBreaker) {
-        return new AbcAdapter(abcWebClient, abcCircuitBreaker);
+            @Qualifier("abcGuard") OutboundGuard abcGuard) {
+        return new AbcAdapter(abcWebClient, abcGuard);
     }
 
     @Bean
@@ -210,31 +209,6 @@ public class RestClientConfiguration {
         }
 
         return builder.build();
-    }
-
-    private static CircuitBreakerConfig createCircuitBreakerConfig() {
-        return CircuitBreakerConfig.custom()
-                .failureRateThreshold(50)
-                .slidingWindowSize(10)
-                .minimumNumberOfCalls(5)
-                .waitDurationInOpenState(Duration.ofSeconds(30))
-                .permittedNumberOfCallsInHalfOpenState(3)
-                .build();
-    }
-
-    @Bean
-    public CircuitBreaker abcCircuitBreaker() {
-        return CircuitBreaker.of("abc", createCircuitBreakerConfig());
-    }
-
-    @Bean
-    public CircuitBreaker lambdaCircuitBreaker() {
-        return CircuitBreaker.of("lambda", createCircuitBreakerConfig());
-    }
-
-    @Bean
-    public CircuitBreaker s3CircuitBreaker() {
-        return CircuitBreaker.of("s3", createCircuitBreakerConfig());
     }
 
     public static class ExternalServiceException extends RuntimeException {

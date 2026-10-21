@@ -3,9 +3,9 @@ package co.onmind.hex.infrastructure.webclients;
 import co.onmind.hex.application.ports.out.CachePort;
 import co.onmind.hex.infrastructure.webclients.dto.AbcRequest;
 import co.onmind.hex.infrastructure.webclients.dto.AbcResponse;
+import co.onmind.hex.transverse.resilience.TestGuards;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
-import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -28,12 +28,10 @@ class WebclientsTest {
     @Mock private AbcWebClient webClient;
     @Mock private CachePort cachePort;
 
-    private CircuitBreaker circuitBreaker;
     private ObjectMapper objectMapper;
 
     @BeforeEach
     void setUp() {
-        circuitBreaker = CircuitBreaker.ofDefaults("test");
         objectMapper = new JsonMapper();
     }
 
@@ -45,7 +43,7 @@ class WebclientsTest {
         when(webClient.sheet("s", "f", "c")).thenReturn(sheetResponse);
         when(webClient.ask(any(AbcRequest.class))).thenReturn(execResponse);
 
-        AbcAdapter adapter = new AbcAdapter(webClient, circuitBreaker);
+        AbcAdapter adapter = new AbcAdapter(webClient, TestGuards.permissive());
 
         assertEquals(1, adapter.sheet("s", "f", "c").total());
         AbcRequest request = AbcRequest.builder().what("find").from("f").some("c").build();

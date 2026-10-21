@@ -4,7 +4,8 @@ Una implementación completa de arquitectura hexagonal (patrón Ports and Adapte
 
 ## Características
 
-- **Programación Bloqueante**: Construido con Spring Boot MVC sobre Tomcat; sin hilos virtuales, sin tipos reactivos
+- **Programación Bloqueante (Clásica)**: Construido con Spring Boot MVC sobre Tomcat, sin tipos reactivos (`Mono`/`Flux`)
+- **Hilos Virtuales**: Cada petición HTTP obtiene su propio hilo virtual (`spring.threads.virtual.enabled=true`). El código sigue siendo 100% bloqueante
 - **Arquitectura Hexagonal**: Separación clara de responsabilidades con capas de dominio, aplicación e infraestructura
 - **Integración JPA**: Acceso a base de datos con Hibernate/JPA sobre H2 en memoria (JDBC)
 - **Controladores REST**: Endpoints con `@RestController` en lugar de enrutamiento funcional
@@ -14,13 +15,14 @@ Una implementación completa de arquitectura hexagonal (patrón Ports and Adapte
 - **Logging Bloqueante**: Filtro servlet (`LoggingFilter`) + aspecto (`LoggingAspect`) con MDC y `requestId`
 - **GraphQL BFF**: Endpoint GraphQL como Backend For Frontend sobre XDB (/abc)
 - **gRPC Client**: Adaptador cliente gRPC para consumir XDB vía protobuf (perfil `grpc`, puerto 9991, stub bloqueante)
-- **Circuit Breaker**: resilience4j en adaptadores de infraestructura (AbcAdapter, LambdaAdapter, S3StoreAdapter; excluye SmtpEmailAdapter)
+- **Resilience**: resilience4j en adaptadores de infraestructura — Circuit Breaker + Bulkhead + Rate Limiter compuestos en un `OutboundGuard` (AbcAdapter, LambdaAdapter, S3StoreAdapter, salvo SmtpEmailAdapter)
+- **Consumidores de eventos**: Kafka, RabbitMQ y SQS con semántica de entrega explícita (el offset/ack avanza solo cuando el trabajo terminó)
 - **Scripts con acceso a infraestructura**: Scripts QuickJS (qjs4j, Java puro) pueden usar servicios XDB, Lambda, S3, Eventos, Email, Cache vía facade
 
 ## Requisitos Previos
 
-- **Java 21** o superior
-- **Gradle 8.7** o superior
+- **Java 25** (`sdk use java 25.0.2-graalce`) — obligatorio, no solo recomendado
+- **Gradle 9+** (el wrapper fija 9.7.1. Gradle ≥ 9.1 es necesario para ejecutar el daemon sobre Java 25)
 - **Git** para clonar el repositorio
 
 ## Arquitectura Hexagonal Bloqueante
@@ -66,7 +68,7 @@ Una implementación completa de arquitectura hexagonal (patrón Ports and Adapte
   `-- transverse/               # Componentes Transversales
       |-- exceptions/           # Manejo global de errores MVC (GlobalExceptionHandler)
       |-- logging/              # Filtro servlet + aspecto de logging
-      `-- resilience/           # CircuitBreakerGeneric bloqueante
+      `-- resilience/           # OutboundGuard (CB + Bulkhead + RateLimiter) bloqueante
 ```
 
 ### Diagrama de Arquitectura
@@ -157,7 +159,7 @@ sequenceDiagram
 ### 2. Características Bloqueantes Clave
 
 - **Objetos directos**: Todos los métodos retornan tipos directos (`T`, `List<T>`, `void`, `Optional<T>`)
-- **Hilos de plataforma**: Sin hilos virtuales; workers de Tomcat en toda la aplicación
+- **Hilos virtuales**: Cada petición corre en un hilo virtual (no en un worker de Tomcat). El I/O bloqueante desmonta la VT del carrier thread
 - **Transacciones**: Límites `@Transactional` en adaptadores de persistencia
 - **Error Handling**: Excepciones de dominio propagadas a `@ControllerAdvice`
 - **Validación**: Bean Validation con `@Valid` en controllers
@@ -176,10 +178,62 @@ Mapeo de excepciones a HTTP status:
 | `RoleNotFoundException` | 404 NOT_FOUND | `NOT_FOUND` |
 | `ScriptNotAllowedException` | 403 FORBIDDEN | `SCRIPT_NOT_ALLOWED` |
 | `MethodArgumentNotValidException` / `ConstraintViolationException` / `IllegalArgumentException` | 400 BAD_REQUEST | `VALIDATION_ERROR` |
+| `BulkheadFullException` / `RequestNotPermitted` | 503 SERVICE_UNAVAILABLE | `SERVICE_UNAVAILABLE` |
 | Cualquier otra | 500 INTERNAL_SERVER_ERROR | `INTERNAL_ERROR` |
+
+Los rejections del bulkhead y del rate limiter son **decisiones de descarte de carga**, no
+fallos del downstream: se responden 503 para que el cliente pueda reintentar con backoff, en
+lugar de un 500 que lo presentaría como un error del servidor.
 
 Los controllers son deliberadamente delgados: delegan en los traits y dejan que
 las excepciones suban al advice (no hay `try/catch` por controller).
+
+## Hilos Virtuales (Virtual Threads)
+
+La aplicación es **bloqueante de principio a fin** — Spring MVC, JPA/Hibernate, Redis síncrono y
+clientes síncronos del AWS SDK — pero corre sobre **hilos virtuales**:
+
+```yaml
+spring:
+  threads:
+    virtual:
+      enabled: true
+```
+
+Cada petición HTTP obtiene su propio hilo virtual en lugar de uno de los 200 workers de Tomcat.
+El I/O bloqueante (JDBC, HTTP, SMTP, S3) **desmonta** la VT del carrier thread, de modo que un
+downstream lento ya no consume un worker.
+
+> **Por qué Java 25 y no 21:** el *pinning* de `synchronized` (JEP 491) se eliminó en **JDK 24**.
+> Con Java 21, el `synchronized` de Hibernate/H2 seguiría pinchando el carrier thread y el JDBC
+> seguiría limitado por el número de carriers. Con 25, la mitad del beneficio (toda la capa de
+> persistencia) existe realmente.
+
+### Tres detalles de apoyo tan importantes como el flag
+
+| Preocupación | Por qué | Dónde |
+|---|---|---|
+| **El scripting es CPU-bound** | Una tarea CPU-bound en una VT ocupa un *carrier* thread durante toda su ejecución. Unos pocos scripts concurrentes agotarían el carrier pool y **detendrían todo el proceso**. Los scripts se ejecutan por eso en un pool acotado de **platform threads**. | `ScriptExecutionExecutor`, `app.scripts.pool-size` / `app.scripts.timeout-seconds` |
+| **Lettuce no debe compartir socket** | Por defecto todas las operaciones Redis comparten una única conexión nativa, lo que serializa todo el tráfico concurrente. | `RedisConfiguration` (`shareNativeConnection = false`) + `spring.data.redis.lettuce.pool.*` |
+| **El cliente HTTP debe multiplexar** | `HttpURLConnection` (`SimpleClientHttpRequestFactory`) no multiplexa. El cliente del JDK (NIO) sí. | `RestClientConfiguration` → `JdkClientHttpRequestFactory`, `spring.http.clients.imperative.factory: jdk` |
+
+### Límites que pasan a ser los reales
+
+Una vez que el servidor web deja de acotar la concurrencia, el cuello de botella se traslada:
+
+- **Hikari** — `spring.datasource.hikari.maximum-pool-size` es ahora el límite real de concurrencia contra la base de datos.
+- **AWS SDK** — `app.aws.max-connections` (por defecto 100) sustituye el default de 50 del SDK.
+
+### Verificación en runtime
+
+El log de petición incluye el hilo que la sirve y si es virtual:
+
+```
+Incoming request: GET /api/health - RequestId: ba208525 - ... - Thread: tomcat-handler-0 (virtual: true)
+```
+
+`VirtualThreadsIT` verifica todo lo anterior en el arranque, y `ResilienceConfigurationIT` que
+los límites configurados llegan a las políticas.
 
 ## Inicio Rápido
 
@@ -210,7 +264,7 @@ curl http://localhost:8080/api/health
 ### Ejecutar Tests
 
 ```bash
-# Ejecutar todos los tests (168 tests, sin brokers necesarios)
+# Ejecutar todos los tests (191 tests, sin brokers necesarios)
 ./gradlew test
 
 # Ejecutar tests con reporte de cobertura
@@ -608,14 +662,54 @@ app:
   aws:
     region: us-east-1
     endpoint: http://localhost:4566   # LocalStack (opcional)
+    max-connections: 100              # pool HTTP del AWS SDK (default del SDK: 50)
   sqs:
     queue-url: https://sqs.us-east-1.amazonaws.com/123/my-queue
     topic:
       script-results: https://sqs.us-east-1.amazonaws.com/123/results
+    poll-interval-ms: 1000
+    visibility-timeout-seconds: 120
 ```
 
-- `SqsEventSenderAdapter` — publica eventos a SQS implementando `EventPublisherPort`. El `topic` se mapea a `queueUrl`; el `key` como atributo de mensaje.
-- `SqsEventConsumerAdapter` — consume mensajes SQS: `pollMessages()` → deserializa `KafkaScriptCommand` → ejecuta script vía `ExecuteScriptTrait` → publica resultado vía `EventPublisherPort` → borra mensaje de la cola (`deleteMessage()`). En fallo de deserialización: borra el mensaje (poison cleanup). En fallo de ejecución: no borra (permite reprocessing). El polling es manual (no hay `@Scheduled`); se exponen `pollMessages()`, `processMessage()` y `deleteMessage()`.
+- `SqsEventSenderAdapter` — publica eventos a SQS implementando `EventPublisherPort`. El `topic` se mapea a `queueUrl`, el `key` a atributo de mensaje.
+- `SqsEventConsumerAdapter` — consume mensajes SQS: `pollMessages()` → deserializa `KafkaScriptCommand` → ejecuta script vía `ExecuteScriptTrait` → publica resultado vía `EventPublisherPort` → borra mensaje de la cola (`deleteMessage()`).
+
+#### El consumidor está cableado
+
+El polling es **automático**: `SqsEventConsumerAdapter.pollAndProcess()` es un `@Scheduled`
+(`fixedDelay`), activado con `@EnableScheduling`. Como el scheduler usa hilos virtuales cuando
+`app.scripts`/VT están activos, la long-polling de 20 s no ocupa ningún carrier thread.
+
+El `fixedDelay` (y no `fixedRate`) garantiza que haya **una sola consulta en vuelo** y que nunca
+se solapen dos polls sobre la misma cola. Un fallo al consultar o al procesar un mensaje
+individual se registra y **el bucle continúa**: un mensaje malo no puede detener el consumidor.
+
+#### Semántica de entrega
+
+| Situación | Resultado | ¿Se borra el mensaje? |
+|---|---|---|
+| Script falla | se publica el resultado de error | **Sí** → se consume |
+| Falla la publicación del resultado | propaga | **No** → se reintenta |
+| Payload corrupto (poison) | se registra | **Sí** → se consume |
+
+Que un script fallido **consuma** el mensaje es deliberado: dejarlo en la cola lo haría reaparecer
+tras el `visibilityTimeout` y volvería a ejecutar el script indefinidamente. Si se requieren
+reintentos automáticos, la vía correcta es una **redrive policy (DLQ)** de SQS.
+
+#### `visibilityTimeout` y duración del script
+
+`app.sqs.visibility-timeout-seconds` (120) **debe ser mayor** que
+`app.scripts.timeout-seconds` (30). Si no, el mensaje reaparece mientras todavía se está
+procesando y el script se ejecuta dos veces en paralelo.
+
+```yaml
+app:
+  scripts:
+    pool-size: 0          # 0 = auto (availableProcessors)
+    timeout-seconds: 30   # watchdog del script
+  sqs:
+    visibility-timeout-seconds: 120
+```
 
 ### RabbitMQ (opcional, perfil `rabbitmq`)
 
@@ -644,7 +738,7 @@ app:
       script-commands: hex4j.script.commands
 ```
 
-- `RabbitMQEventPublisherAdapter` — publica eventos implementando `EventPublisherPort`. El `topic` se mapea a `exchange`; el `key` a `routingKey`.
+- `RabbitMQEventPublisherAdapter` — publica eventos implementando `EventPublisherPort`. El `topic` se mapea a `exchange`, el `key` a `routingKey`.
 - `RabbitMQEventConsumerAdapter` — consume mensajes via `@RabbitListener`, deserializa `KafkaScriptCommand`, ejecuta script vía `ExecuteScriptTrait`, publica resultado vía `EventPublisherPort`.
 
 ### AWS SNS (opcional, perfil `sns`)
@@ -738,7 +832,7 @@ XDB abre el listener gRPC en el puerto 9991 (configurado en `api/xdb`).
      llama gRPC `execute`.
 3. El bean `AbcPort @Primary` en `GrpcConfiguration` envuelve `GrpcAbcAdapter`
    con `CachedAbcAdapter` (cache de lecturas, igual que con el adaptador HTTP).
-4. Circuit Breaker: `abc` (comparte configuración con `lambda`, `s3`).
+4. OutboundGuard: `abcGuard` (el mismo guard que usa el adaptador HTTP de XDB).
 
 #### Mapeo de campos
 
@@ -850,7 +944,7 @@ public class SomeUseCase {
 
 ### Estrategia de Testing
 
-La aplicación implementa una pirámide de testing bloqueante (168 tests, sin brokers necesarios):
+La aplicación implementa una pirámide de testing bloqueante (191 tests, sin brokers necesarios):
 
 1. **Tests Unitarios (70%)**
    - Servicios de dominio con JUnit + AssertJ
@@ -1108,50 +1202,98 @@ public class UserController {
 
 ### Mejores Prácticas para Desarrollo Bloqueante
 
-1. **Sin tipos reactivos**: Nunca usar `Mono`/`Flux`; retornar `T`, `List<T>`, `Optional<T>` o `void`
+1. **Sin tipos reactivos**: Nunca usar `Mono`/`Flux`, retornar `T`, `List<T>`, `Optional<T>` o `void`
 2. **Transacciones**: Anotar adaptadores de persistencia con `@Transactional` (lecturas `readOnly = true`)
 3. **Manejo de Errores**: Lanzar excepciones de dominio y dejar que `@ControllerAdvice` las mapee
 4. **Validación**: Usar `@Valid` en controllers + Bean Validation en DTOs
-5. **Testing**: Mocks por puerto; `@DataJpaTest` para persistencia
+5. **Testing**: Mocks por puerto, `@DataJpaTest` para persistencia
 6. **Inyección**: Constructor injection explícito (cuidado con `@InjectMocks` ambiguo si un mock implementa varios traits)
 
-## Resilience (Circuit Breaker)
+## Resilience (Circuit Breaker + Bulkhead + Rate Limiter)
 
-Adaptadores de infraestructura que llaman servicios externos están protegidos con
-**Circuit Breaker** vía Resilience4j. La clase `CircuitBreakerGeneric` en
-`transverse/resilience/` envuelve llamadas bloqueantes con `executeSupplier` / `executeRunnable`.
+Los adaptadores de infraestructura que llaman a servicios externos están protegidos con
+**tres políticas de resilience4j** compuestas en un `OutboundGuard`
+(`transverse/resilience/OutboundGuard.java`), que envuelve la llamada bloqueante.
 
-### Dependencia
+### Dependencias
 
 ```gradle
 implementation 'io.github.resilience4j:resilience4j-circuitbreaker:2.2.0'
+implementation 'io.github.resilience4j:resilience4j-bulkhead:2.2.0'
+implementation 'io.github.resilience4j:resilience4j-ratelimiter:2.2.0'
 ```
 
-### Configuración de Circuit Breakers
+### Orden de composición (importante)
 
-Los beans se definen en `RestClientConfiguration` con la misma configuración base:
+```
+RateLimiter  →  Bulkhead  →  CircuitBreaker  →  llamada
+```
+
+- **Rate limiter** (el más externo) — rechaza el exceso de llamadas antes de que ocupe una ranura
+  de concurrencia y antes de tocar el downstream.
+- **Bulkhead** — acota cuántas llamadas están **en vuelo** a la vez. Es la política que los hilos
+  virtuales hacen obligatoria: sin ella, un número ilimitado de VTs golpearía el downstream.
+- **Circuit breaker** (el más interno) — solo observa fallos reales del downstream. Un rejection
+  del bulkhead o del rate limiter **no** es un fallo del downstream y nunca abre el breaker.
+
+El circuit breaker va al final precisamente por eso: si estuviera fuera, contaría los rechazos
+propios como fallos y se abriría solo.
+
+### Beans
+
+Los beans se definen en `ResilienceConfiguration` (no en `RestClientConfiguration`):
 
 | Bean | Servicio protegido |
 |---|---|
-| `abcCircuitBreaker` | XDB `/abc` (HTTP) |
-| `lambdaCircuitBreaker` | AWS Lambda invocation |
-| `s3CircuitBreaker` | AWS S3 operations |
+| `abcGuard` | XDB `/abc` (HTTP y gRPC) |
+| `lambdaGuard` | AWS Lambda invocation |
+| `s3Guard` | AWS S3 operations |
 
-Config: failure-rate 50%, window 10, min 5 calls, 30s open, 3 half-open calls.
+Config del circuit breaker: failure-rate 50%, window 10, min 5 calls, 30s open, 3 half-open calls.
 
-### Adaptadores con Circuit Breaker
+### Configuración
+
+```yaml
+app:
+  resilience:
+    abc:
+      max-concurrent-calls: 20
+      rate-limit-per-period: 50
+    s3:
+      max-concurrent-calls: 10
+      rate-limit-per-period: 20
+    lambda:
+      max-concurrent-calls: 10
+      rate-limit-per-period: 20
+```
+
+El bloque es **opcional**: los defaults de `ResilienceProperties` ya son razonables. Tanto el
+bulkhead como el rate limiter **rechazan de inmediato** por defecto (`max-wait-ms` y
+`rate-limit-timeout-ms` en 0). Subirlos convierte el rechazo en una espera.
+
+> El `timeoutDuration` por defecto del rate limiter de resilience4j es **5 s**, no 0. Con ese
+> valor el operador *retrasa* la suscripción en vez de rechazar, así que el efecto real sería
+> "suavizar el pico" y no "descartar carga".
+
+### Adaptadores con OutboundGuard
 
 | Adaptador | Bean inyectado |
 |---|---|
-| `AbcAdapter` | `abcCircuitBreaker` |
-| `LambdaAdapter` | `lambdaCircuitBreaker` |
-| `S3StoreAdapter` | `s3CircuitBreaker` |
+| `AbcAdapter` | `abcGuard` |
+| `GrpcAbcAdapter` | `abcGuard` |
+| `LambdaAdapter` | `lambdaGuard` |
+| `S3StoreAdapter` | `s3Guard` |
 
-### Adaptadores SIN Circuit Breaker
+### Adaptadores SIN OutboundGuard
 
 | Adaptador | Razón |
 |---|---|
-| `SmtpEmailAdapter` | Email es best-effort; SMTP lento pero funcional no debe bloquear entrega. Retry es preferible a fast-fail. |
+| `SmtpEmailAdapter` | Email es best-effort. Un SMTP lento pero funcional no debe bloquear la entrega. Retry es preferible a fast-fail. |
+
+### Respuesta HTTP ante un rechazo
+
+Un rejection del bulkhead o del rate limiter se traduce a **503 Service Unavailable**
+(`SERVICE_UNAVAILABLE`) en `GlobalExceptionHandler`, no a un 500.
 
 ## Notificaciones (Email)
 
@@ -1261,7 +1403,7 @@ logging:
   duración, publica MDC (`requestId`, `method`, `path`, `status`, `duration`),
   avisa requests lentos (>1000ms) y limpia el MDC al final.
 - `LoggingAspect`: entry/exit de capas application/domain/controllers con
-  argumentos, resultado y tiempo; avisa ejecuciones lentas (>500ms).
+  argumentos, resultado y tiempo. Avisa ejecuciones lentas (>500ms).
 - `LoggingConfiguration`: `CommonsRequestLoggingFilter` con query string y
   payload (máx 10000 chars).
 
@@ -1373,8 +1515,9 @@ del facade. Capas adicionales:
 |---|---|
 | Whitelist | `app.scripts.whitelist` + `ScriptWhitelist.requireAllowed()` (403 si no permitido) |
 | Anti-traversal | `ClasspathScriptSourceAdapter` rechaza `..`, `/`, `\` |
-| Memoria | `setMaxMemoryUsage(32MB)` (cubre ArrayBuffers; resto acotado por `-Xmx`) |
-| Límite de tiempo | No disponible en qjs4j 0.1.1 (solo existe en `main` sin publicar) |
+| Memoria | `setMaxMemoryUsage(32MB)` (cubre ArrayBuffers, el resto queda acotado por `-Xmx`) |
+| Concurrencia | `ScriptExecutionExecutor` — pool acotado de platform threads (`app.scripts.pool-size`), porque el script es CPU-bound y en una VT ocuparía un carrier thread |
+| Límite de tiempo | `app.scripts.timeout-seconds` (30) — watchdog. qjs4j 0.1.1 no tiene API de interrupt, así que el llamante se libera pero el worker queda ocupado hasta que el script termina por su cuenta |
 
 Los scripts **solo pueden** usar los métodos públicos del facade.
 
@@ -1398,7 +1541,7 @@ Los scripts **solo pueden** usar los métodos públicos del facade.
 | `cacheEvict(key)` | Borrar cache | `CachePort` |
 
 Los métodos son llamadas directas bloqueantes al facade. Los valores de retorno
-llegan al script como objetos JS (los records se convierten a `Map`); los
+llegan al script como objetos JS (los records se convierten a `Map`). Los
 números enteros se renderizan sin `.0` en el `value` del resultado.
 
 ### Ejemplo

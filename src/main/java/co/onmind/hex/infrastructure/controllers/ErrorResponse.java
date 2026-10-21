@@ -79,4 +79,15 @@ public record ErrorResponse(
     public static ErrorResponse internalError(String message, String path) {
         return of("INTERNAL_ERROR", message, path);
     }
+
+    /**
+     * Creates an ErrorResponse for a temporarily unavailable downstream.
+     *
+     * @param message The error message
+     * @param path The request path
+     * @return A new ErrorResponse instance with the service-unavailable error code
+     */
+    public static ErrorResponse serviceUnavailable(String message, String path) {
+        return of("SERVICE_UNAVAILABLE", message, path);
+    }
 }

@@ -2,8 +2,7 @@ package co.onmind.hex.infrastructure.storage;
 
 import co.onmind.hex.application.ports.out.StorePort;
 import co.onmind.hex.domain.models.StoreItem;
-import co.onmind.hex.transverse.resilience.CircuitBreakerGeneric;
-import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import co.onmind.hex.transverse.resilience.OutboundGuard;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -21,17 +20,17 @@ public class S3StoreAdapter implements StorePort {
     private static final Logger logger = LoggerFactory.getLogger(S3StoreAdapter.class);
 
     private final S3Client s3Client;
-    private final CircuitBreaker circuitBreaker;
+    private final OutboundGuard guard;
 
-    public S3StoreAdapter(S3Client s3Client, CircuitBreaker s3CircuitBreaker) {
+    public S3StoreAdapter(S3Client s3Client, OutboundGuard s3Guard) {
         this.s3Client = s3Client;
-        this.circuitBreaker = s3CircuitBreaker;
+        this.guard = s3Guard;
     }
 
     @Override
     public List<StoreItem> listItems(String bucket) {
         logger.debug("S3 listItems bucket={}", bucket);
-        return CircuitBreakerGeneric.withCircuitBreaker(() -> {
+        return guard.execute(() -> {
             ListObjectsV2Request request = ListObjectsV2Request.builder()
                 .bucket(bucket)
                 .build();
@@ -42,7 +41,7 @@ public class S3StoreAdapter implements StorePort {
                 .toList();
             logger.debug("S3 listItems bucket={} count={}", bucket, items.size());
             return items;
-        }, circuitBreaker);
+        });
     }
 
     private StoreItem toStoreItem(S3Object s3Object) {

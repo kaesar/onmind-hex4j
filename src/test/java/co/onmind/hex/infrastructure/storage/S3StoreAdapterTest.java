@@ -1,7 +1,7 @@
 package co.onmind.hex.infrastructure.storage;
 
 import co.onmind.hex.domain.models.StoreItem;
-import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import co.onmind.hex.transverse.resilience.TestGuards;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -40,7 +40,7 @@ class S3StoreAdapterTest {
         when(paginator.contents()).thenReturn(contents);
         when(s3Client.listObjectsV2Paginator(any(ListObjectsV2Request.class))).thenReturn(paginator);
 
-        S3StoreAdapter adapter = new S3StoreAdapter(s3Client, CircuitBreaker.ofDefaults("test"));
+        S3StoreAdapter adapter = new S3StoreAdapter(s3Client, TestGuards.permissive());
         List<StoreItem> items = adapter.listItems("my-bucket");
 
         assertEquals(1, items.size());
@@ -60,7 +60,7 @@ class S3StoreAdapterTest {
         when(paginator.contents()).thenReturn(contents);
         when(s3Client.listObjectsV2Paginator(any(ListObjectsV2Request.class))).thenReturn(paginator);
 
-        S3StoreAdapter adapter = new S3StoreAdapter(s3Client, CircuitBreaker.ofDefaults("test"));
+        S3StoreAdapter adapter = new S3StoreAdapter(s3Client, TestGuards.permissive());
 
         assertTrue(adapter.listItems("empty-bucket").isEmpty());
     }

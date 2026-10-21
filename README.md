@@ -2,6 +2,11 @@
 
 This project implements a hexagonal architecture approach using Java 25, Spring Boot Framework and Gradle, with ports and use cases located in the application layer.
 
+## Requirements
+
+- **Java 25** (`sdk use java 25.0.2-graalce`) — required, not just recommended
+- **Gradle 9+** (the wrapper pins 9.7.1. Gradle ≥ 9.1 is needed to run the daemon on Java 25)
+
 ## Architecture
 
 ### Hexagonal Architecture Variation
@@ -15,7 +20,7 @@ This implementation presents a variation of traditional hexagonal architecture:
 ### Project Structure
 
 ```
-  __________________
+  ________________
 ./ co.onmind.hex /
 ├── domain/
 │   ├── models/          # Domain models (Role, ScriptResult, ScriptWhitelist, StoreItem)
@@ -59,19 +64,10 @@ This implementation presents a variation of traditional hexagonal architecture:
 - **H2 database** with automatic initialization
 - **Structured logging** for monitoring
 - **Sandboxed scripting** with QuickJS (Java 25)
+- **Virtual threads** with per-downstream circuit breaker, bulkhead and rate limiter
+- **Unit and integration tests** (JUnit 5 + Mockito)
 
-## Features
-
-- **Hexagonal architecture** with ports in application
-- **Clear separation of responsibilities** by layers
-- **Dependency injection** with Micronaut
-- **Data validation** with Bean Validation
-- **Enhanced HTTP error handling**
-- **Unit and integration tests** (75%+ coverage)
-- **H2 database** with automatic initialization
-- **Structured logging** for monitoring
-
-## Endpoints API
+## Getting Started
 
 ### Running the Application
 
@@ -79,7 +75,7 @@ This implementation presents a variation of traditional hexagonal architecture:
 ./gradlew bootRun
 ```
 
-The application will start on `http://localhost:8080`
+The application starts on `http://localhost:8080`.
 
 ### Building the Project
 
@@ -92,27 +88,22 @@ The application will start on `http://localhost:8080`
 ```bash
 ./gradlew test
 ```
-<!--
-### Accessing H2 Console
 
-When the application is running, you can access the H2 database console at:
-`http://localhost:8080/h2-console`
+Coverage report:
+
+```bash
+./gradlew test jacocoTestReport
+```
+
+### H2 Console
+
+Enabled in the `dev` profile, at `http://localhost:8080/h2-console`:
 
 - JDBC URL: `jdbc:h2:mem:hex4j`
 - Username: `sa`
-- Password: `password`
+- Password: _(empty)_
 
-## Example Implementation
-
-The template includes a complete Role management example demonstrating:
-
-- Domain model with business logic
-- Use cases for CRUD operations
-- REST API endpoints
-- JPA persistence
-- Comprehensive testing
--->
-## Endpoints API
+## API Endpoints
 
 ### Roles
 - `POST /api/v1/roles` - Create role
@@ -161,49 +152,21 @@ curl "http://localhost:8080/api/v1/roles/search?name=ADMIN"
 6. **Robustness**: Enhanced error handling with proper exceptions
 7. **Scalability**: Architecture ready for microservices
 
-## Execution
-
-### Requirements
-- **Java 25** (`sdk use java 25.0.2-graalce`) — required, not just recommended
-- **Gradle 9+** (the wrapper pins 9.7.1; Gradle ≥ 9.1 is needed to run the daemon on Java 25)
-
-## Virtual Threads
+## Concurrency
 
 The application is **blocking end to end** — Spring MVC, JPA/Hibernate, synchronous Redis and
-synchronous AWS SDK clients — but it runs on **virtual threads**:
+synchronous AWS SDK clients — but it runs on **virtual threads**
+(`spring.threads.virtual.enabled=true`). Every request gets its own virtual thread instead of one
+of Tomcat's 200 platform workers, so blocking I/O no longer consumes a worker.
 
-```yaml
-spring:
-  threads:
-    virtual:
-      enabled: true
-```
+Because the web server no longer caps concurrency, each outbound dependency has an explicit
+limit: a circuit breaker, a bulkhead and a rate limiter composed per downstream, plus a
+visibility timeout for SQS that outlasts the maximum script execution time.
 
-Every HTTP request gets its own virtual thread instead of one of Tomcat's 200 platform workers.
-Blocking I/O (JDBC, HTTP, SMTP, S3) unmounts the virtual thread from its carrier, so a slow
-downstream no longer consumes a worker.
+> Design details: [HELP.md](./HELP.md) — "Hilos Virtuales", "Resilience" and the per-adapter
+> configuration sections.
 
-Three supporting details matter as much as the flag itself:
-
-| Concern | Why | Where |
-|---|---|---|
-| **Scripting is CPU-bound** | A CPU-bound task on a virtual thread occupies a *carrier* thread for its whole run; a few concurrent scripts would starve the whole process. Scripts therefore run on a bounded pool of **platform** threads. | `ScriptExecutionExecutor`, `app.scripts.pool-size` / `app.scripts.timeout-seconds` |
-| **Lettuce must not share one socket** | By default all Redis operations share a single native connection, which serializes concurrent traffic. | `RedisConfiguration` (`shareNativeConnection = false`) + `spring.data.redis.lettuce.pool.*` |
-| **The HTTP client must multiplex** | `HttpURLConnection` (`SimpleClientHttpRequestFactory`) cannot multiplex; the NIO-based JDK client can. | `RestClientConfiguration` → `JdkClientHttpRequestFactory`, `spring.http.clients.imperative.factory: jdk` |
-
-Two additional limits become the real ones once the web server stops capping concurrency:
-
-- **Hikari** — `spring.datasource.hikari.maximum-pool-size` is now the database concurrency limit.
-- **AWS SDK** — `app.aws.max-connections` (default 100) replaces the SDK's default of 50.
-
-To confirm the setup at runtime, the request log includes the serving thread and whether it is
-virtual:
-
-```
-Incoming request: GET /api/health - RequestId: ba208525 - ... - Thread: tomcat-handler-0 (virtual: true)
-```
-
-`VirtualThreadsIT` asserts all of the above at boot time.
+## Extending the Template
 
 1. Create domain model in `domain/models/`
 2. Create domain exceptions in `domain/exceptions/`
@@ -217,44 +180,17 @@ Incoming request: GET /api/health - RequestId: ba208525 - ... - Thread: tomcat-h
 10. Create REST controller in `infrastructure/controllers/`
 11. Add comprehensive tests
 
-```bash
-# Build application
-./gradlew build
+The template includes a complete Role management example demonstrating the domain model with
+business logic, use cases for CRUD operations, REST API endpoints, JPA persistence and
+comprehensive testing.
 
-# Run application
-./gradlew bootRun
+## Documentation
 
-# Generate coverage report
-./gradlew test jacocoTestReport
-```
+- **English**: this file
+- **Español**: [HELP.md](./HELP.md) — detailed architecture, configuration of every adapter
+  (Kafka, SQS, RabbitMQ, SNS, EventBridge, Redis, gRPC), virtual threads, resilience, testing
+  and extension guide
 
-> The application runs on `http://localhost:8080`  
+## License
 
-## Usage Examples
-
-### Create a role
-```bash
-curl -X POST http://localhost:8080/api/v1/roles \
-  -H "Content-Type: application/json" \
-  -d '{"name": "DEVELOPER"}'
-```
-
-### Get all roles
-```bash
-curl http://localhost:8080/api/v1/roles
-```
-
-### Search roles
-```bash
-curl "http://localhost:8080/api/v1/roles/search?name=ADMIN"
-```
-
-## Design Principles
-
-1. **Dependency Inversion**: Domain doesn't depend on infrastructure
-2. **Separation of Concerns**: Each layer has a specific responsibility
-3. **Testability**: Easy testing through port mocking
-4. **Flexibility**: Easy swapping of infrastructure adapters
-5. **Maintainability**: Clean and well-structured code
-6. **Robustness**: Enhanced error handling with pattern matching
-7. **Scalability**: Architecture ready for microservices
+[MIT](./LICENSE)

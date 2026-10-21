@@ -79,7 +79,7 @@ class AwsMessagingAdaptersTest {
 
         SqsEventConsumerAdapter adapter = new SqsEventConsumerAdapter(
             sqsClient, executeScriptTrait, eventPublisher, objectMapper,
-            "queue-url", "results-queue");
+            "queue-url", "results-queue", 120);
 
         List<Message> messages = adapter.pollMessages();
         assertEquals(1, messages.size());
@@ -103,7 +103,7 @@ class AwsMessagingAdaptersTest {
 
         SqsEventConsumerAdapter adapter = new SqsEventConsumerAdapter(
             sqsClient, executeScriptTrait, eventPublisher, objectMapper,
-            "queue-url", "results-queue");
+            "queue-url", "results-queue", 120);
 
         adapter.processMessage(message);
 

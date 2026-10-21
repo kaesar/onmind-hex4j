@@ -4,6 +4,8 @@ import co.onmind.hex.domain.exceptions.DuplicateRoleException;
 import co.onmind.hex.domain.exceptions.RoleNotFoundException;
 import co.onmind.hex.domain.exceptions.ScriptNotAllowedException;
 import co.onmind.hex.infrastructure.controllers.ErrorResponse;
+import io.github.resilience4j.bulkhead.BulkheadFullException;
+import io.github.resilience4j.ratelimiter.RequestNotPermitted;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
@@ -144,6 +146,33 @@ public class GlobalExceptionHandler {
         );
 
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(errorResponse);
+    }
+
+    /**
+     * Handles the rejections produced by our own bulkhead and rate limiter and returns
+     * HTTP 503.
+     * <p>
+     * These are not downstream failures: the downstream is either saturated or the call
+     * rate was exceeded, and the caller should back off and retry later. Answering 500
+     * would hide a load-shedding decision behind a generic server error.
+     *
+     * @param ex The rejection exception
+     * @param request The HTTP request that caused the exception
+     * @return ResponseEntity with ErrorResponse and HTTP 503 status
+     */
+    @ExceptionHandler({BulkheadFullException.class, RequestNotPermitted.class})
+    public ResponseEntity<ErrorResponse> handleOverloaded(
+            RuntimeException ex,
+            HttpServletRequest request) {
+
+        logger.warn("Downstream overloaded, request rejected: {}", ex.getMessage());
+
+        ErrorResponse errorResponse = ErrorResponse.serviceUnavailable(
+                "The downstream service is temporarily unavailable, please retry later.",
+                request.getRequestURI()
+        );
+
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(errorResponse);
     }
 
     /**
